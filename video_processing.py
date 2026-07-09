@@ -66,6 +66,13 @@ def processar_video(
         bbox_coords_opencv[0] + bbox_coords_opencv[2] / 2,
         bbox_coords_opencv[1] + bbox_coords_opencv[3] / 2,
     )
+    if matriz_homografia is not None:
+        posicao_ultimo_carimbo_px = tuple(
+            cv2.perspectiveTransform(
+                np.array([[posicao_ultimo_carimbo_px]], dtype=np.float32),
+                matriz_homografia,
+            )[0, 0]
+        )
 
     contador_frames_processados = 0
     while True:
@@ -77,25 +84,30 @@ def processar_video(
         if not success:
             break
 
-        if matriz_homografia is not None:
-            frame_atual = cv2.warpPerspective(frame_atual, matriz_homografia, dimensao_homografia)
-
         status_text_element.text(f"Processando e Rastreando frame {frame_atual_idx}/{end_frame_idx}...")
         success_track, bbox_atual = tracker.update(frame_atual)
         frame_video_out = frame_atual.copy()
 
         if success_track:
             centro_atual_px = (bbox_atual[0] + bbox_atual[2] / 2, bbox_atual[1] + bbox_atual[3] / 2)
+            centro_medida_px = centro_atual_px
+            if matriz_homografia is not None:
+                centro_medida_px = tuple(
+                    cv2.perspectiveTransform(
+                        np.array([[centro_atual_px]], dtype=np.float32),
+                        matriz_homografia,
+                    )[0, 0]
+                )
             dist_pixels = np.sqrt(
-                (centro_atual_px[0] - posicao_ultimo_carimbo_px[0]) ** 2
-                + (centro_atual_px[1] - posicao_ultimo_carimbo_px[1]) ** 2
+                (centro_medida_px[0] - posicao_ultimo_carimbo_px[0]) ** 2
+                + (centro_medida_px[1] - posicao_ultimo_carimbo_px[1]) ** 2
             )
 
             (x, y, w, h) = [int(v) for v in bbox_atual]
             cv2.rectangle(frame_video_out, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.circle(frame_video_out, (int(centro_atual_px[0]), int(centro_atual_px[1])), 4, (0, 0, 255), -1)
 
-            carimbos_data.append([frame_atual_idx, centro_atual_px[0], centro_atual_px[1]])
+            carimbos_data.append([frame_atual_idx, centro_medida_px[0], centro_medida_px[1]])
 
             is_stamp = False
             if contador_frames_processados == 0 or (dist_pixels * scale_factor >= fator_distancia):
@@ -105,7 +117,7 @@ def processar_video(
                 regiao = frame_atual[y_s:y_e, x_s:x_e]
                 if regiao.size > 0:
                     imagem_estroboscopica[y_s:y_e, x_s:x_e] = regiao
-                posicao_ultimo_carimbo_px = centro_atual_px
+                posicao_ultimo_carimbo_px = centro_medida_px
 
             carimbos_data[-1].append(is_stamp)
 

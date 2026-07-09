@@ -1,10 +1,6 @@
-import hashlib
-import html
 import os
 import tempfile
 from io import BytesIO
-from pathlib import Path
-from urllib.parse import quote
 
 import cv2
 import matplotlib.pyplot as plt
@@ -13,9 +9,9 @@ import pandas as pd
 import streamlit as st
 from streamlit_image_coordinates import streamlit_image_coordinates
 
-from app_config import APP_DIR, DEFAULT_APP_CSS
+from app_config import DEFAULT_APP_CSS
 from app_state import load_selected_video, reset_video_state
-from perspective_calibration import aplicar_homografia
+from perspective_calibration import aplicar_homografia, estimate_pixels_per_unit
 from sample_videos import list_validation_videos, make_video_thumbnail
 from savgol_reverse import estimate_savgol_bounds
 from ui_controls import render_stamp_density_selector
@@ -133,38 +129,6 @@ def preview_savgol_pair(n_points, profile):
         order = 2
 
     return window, order
-
-
-def render_download_link(label, data, filename, mime):
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-
-    export_dir = APP_DIR / "static" / "exports"
-    export_dir.mkdir(parents=True, exist_ok=True)
-    suffix = Path(filename).suffix
-    stem = Path(filename).stem
-    digest = hashlib.sha1(data).hexdigest()[:12]
-    stored_name = f"{stem}_{digest}{suffix}"
-    (export_dir / stored_name).write_bytes(data)
-
-    safe_label = html.escape(label)
-    safe_filename = html.escape(filename, quote=True)
-    href = f"app/static/exports/{quote(stored_name)}"
-    st.markdown(
-        f"""
-        <a
-            class="direct-download-link"
-            href="{href}"
-            download="{safe_filename}"
-            target="_blank"
-            rel="noopener"
-            type="{html.escape(mime, quote=True)}"
-        >
-            {safe_label}
-        </a>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def render_contact_footer():
@@ -296,12 +260,12 @@ def render_frame_selection():
         rerun()
 
 
-def draw_configuration_overlay(frame, usar_homografia, ferramenta_ativa):
+def draw_configuration_overlay(frame, calibration_mode, ferramenta_ativa):
     frame_com_grade = desenhar_grade_cartesiana(frame)
     height, width = frame_com_grade.shape[:2]
     preview = frame_com_grade.copy()
 
-    if usar_homografia:
+    if calibration_mode == "Plano (homografia métrica)":
         pts = [
             (int(st.session_state.hx1), int(st.session_state.hy1)),
             (int(st.session_state.hx2), int(st.session_state.hy2)),
@@ -313,54 +277,124 @@ def draw_configuration_overlay(frame, usar_homografia, ferramenta_ativa):
             cv2.circle(preview, point, 6, (0, 165, 255), -1)
             cv2.putText(preview, str(idx), (point[0] + 10, point[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
 
-    if "Perspectiva" not in ferramenta_ativa:
+    if calibration_mode == "Dois pontos" and "Perspectiva" not in ferramenta_ativa:
         oy_cv = int(height - st.session_state.orig_y)
         y1_cv = int(height - st.session_state.y1)
         y2_cv = int(height - st.session_state.y2)
-        obj_y_cv = int(height - st.session_state.obj_y - st.session_state.obj_h)
         cv2.circle(preview, (int(st.session_state.orig_x), oy_cv), 9, (255, 0, 255), -1)
         cv2.putText(preview, "(0,0)", (int(st.session_state.orig_x) + 14, oy_cv), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 2)
         cv2.circle(preview, (int(st.session_state.x1), y1_cv), 5, (0, 255, 255), -1)
         cv2.circle(preview, (int(st.session_state.x2), y2_cv), 5, (0, 255, 255), -1)
         cv2.line(preview, (int(st.session_state.x1), y1_cv), (int(st.session_state.x2), y2_cv), (0, 255, 255), 2)
-        cv2.rectangle(
-            preview,
-            (int(st.session_state.obj_x), obj_y_cv),
-            (int(st.session_state.obj_x + st.session_state.obj_w), int(obj_y_cv + st.session_state.obj_h)),
-            (255, 0, 0),
-            2,
-        )
+
+    obj_y_cv = int(height - st.session_state.obj_y - st.session_state.obj_h)
+    cv2.rectangle(
+        preview,
+        (int(st.session_state.obj_x), obj_y_cv),
+        (int(st.session_state.obj_x + st.session_state.obj_w), int(obj_y_cv + st.session_state.obj_h)),
+        (255, 0, 0),
+        2,
+    )
     return preview
 
 
-def apply_click(value, scale, height, ferramenta_ativa):
-    if value is None or st.session_state.get("last_click") == value:
-        return
-    st.session_state.last_click = value
-    x_click = int(value["x"] * scale)
-    y_click = int(value["y"] * scale)
+def set_tool_point_from_image_coords(ferramenta_ativa, x_click, y_click, width, height):
+    x_click = int(max(0, min(width - 1, x_click)))
+    y_click = int(max(0, min(height - 1, y_click)))
     y_inv = int(height - y_click)
 
     updates = {
         "Origem (0,0)": ("orig_x", "orig_y", x_click, y_inv),
         "Calibração: ponto 1": ("x1", "y1", x_click, y_inv),
         "Calibração: ponto 2": ("x2", "y2", x_click, y_inv),
-        "Objeto: canto inferior esquerdo": ("obj_x", "obj_y", x_click, y_inv),
         "Perspectiva: sup. esq. (1)": ("hx1", "hy1", x_click, y_click),
         "Perspectiva: sup. dir. (2)": ("hx2", "hy2", x_click, y_click),
         "Perspectiva: inf. dir. (3)": ("hx3", "hy3", x_click, y_click),
         "Perspectiva: inf. esq. (4)": ("hx4", "hy4", x_click, y_click),
     }
+    if ferramenta_ativa == "Objeto: canto inferior esquerdo":
+        st.session_state.obj_x = int(max(0, min(width - st.session_state.obj_w, x_click)))
+        st.session_state.obj_y = int(max(0, min(height - st.session_state.obj_h, y_inv)))
+        return True
     if ferramenta_ativa in updates:
         key_x, key_y, new_x, new_y = updates[ferramenta_ativa]
         st.session_state[key_x] = new_x
         st.session_state[key_y] = new_y
+        if ferramenta_ativa.startswith("Perspectiva"):
+            st.session_state.pop("matriz_H", None)
+            st.session_state.pop("dim_H", None)
+            st.session_state.pop("homography_meta", None)
+            st.session_state.pop("homography_signature", None)
+        return True
+    return False
+
+
+def apply_click(value, scale, width, height, ferramenta_ativa):
+    click_signature = (ferramenta_ativa, value)
+    if value is None or st.session_state.get("last_click") == click_signature:
+        return
+    st.session_state.last_click = click_signature
+    x_click = int(value["x"] * scale)
+    y_click = int(value["y"] * scale)
+    if set_tool_point_from_image_coords(ferramenta_ativa, x_click, y_click, width, height):
+        rerun()
+
+
+def get_tool_point_image_coords(ferramenta_ativa, height):
+    points = {
+        "Origem (0,0)": (st.session_state.orig_x, height - st.session_state.orig_y),
+        "Calibração: ponto 1": (st.session_state.x1, height - st.session_state.y1),
+        "Calibração: ponto 2": (st.session_state.x2, height - st.session_state.y2),
+        "Objeto: canto inferior esquerdo": (st.session_state.obj_x, height - st.session_state.obj_y),
+        "Perspectiva: sup. esq. (1)": (st.session_state.hx1, st.session_state.hy1),
+        "Perspectiva: sup. dir. (2)": (st.session_state.hx2, st.session_state.hy2),
+        "Perspectiva: inf. dir. (3)": (st.session_state.hx3, st.session_state.hy3),
+        "Perspectiva: inf. esq. (4)": (st.session_state.hx4, st.session_state.hy4),
+    }
+    return points.get(ferramenta_ativa)
+
+
+def render_point_magnifier(frame, ferramenta_ativa):
+    height, width = frame.shape[:2]
+    point = get_tool_point_image_coords(ferramenta_ativa, height)
+    if point is None:
+        st.info("Escolha uma ferramenta de ponto para ativar a lupa.")
+        return
+
+    x, y = [int(round(value)) for value in point]
+    radius = 38
+    x0, x1 = max(0, x - radius), min(width, x + radius)
+    y0, y1 = max(0, y - radius), min(height, y + radius)
+    crop = frame[y0:y1, x0:x1].copy()
+    if crop.size:
+        zoom = cv2.resize(crop, None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
+        cx = int((x - x0) * 4)
+        cy = int((y - y0) * 4)
+        cv2.line(zoom, (cx, 0), (cx, zoom.shape[0] - 1), (0, 0, 255), 1)
+        cv2.line(zoom, (0, cy), (zoom.shape[1] - 1, cy), (0, 0, 255), 1)
+        st.image(cv2.cvtColor(zoom, cv2.COLOR_BGR2RGB), caption="Lupa do ponto ativo", use_container_width=True)
+
+    step = st.number_input("Ajuste fino (px)", min_value=1, max_value=20, value=2, step=1)
+    top = st.columns([1, 1, 1])
+    middle = st.columns([1, 1, 1])
+    if top[1].button("↑", use_container_width=True):
+        set_tool_point_from_image_coords(ferramenta_ativa, x, y - step, width, height)
+        rerun()
+    if middle[0].button("←", use_container_width=True):
+        set_tool_point_from_image_coords(ferramenta_ativa, x - step, y, width, height)
+        rerun()
+    if middle[2].button("→", use_container_width=True):
+        set_tool_point_from_image_coords(ferramenta_ativa, x + step, y, width, height)
+        rerun()
+    bottom = st.columns([1, 1, 1])
+    if bottom[1].button("↓", use_container_width=True):
+        set_tool_point_from_image_coords(ferramenta_ativa, x, y + step, width, height)
         rerun()
 
 
 def render_homography_controls():
     with st.expander("Homografia métrica para vídeos não ortogonais", expanded=True):
-        st.caption("Marque quatro cantos de um retângulo real no plano do movimento.")
+        st.caption("Marque quatro cantos de um retângulo real no plano do movimento. A imagem original permanece sem distorção; a homografia só converte as coordenadas rastreadas para escala métrica.")
         cols = st.columns(4)
         labels = [
             ("hx1", "hy1", "Superior esquerdo"),
@@ -373,44 +407,51 @@ def render_homography_controls():
                 st.session_state[key_x] = st.number_input(f"{label} X", value=int(st.session_state[key_x]), step=10)
                 st.session_state[key_y] = st.number_input(f"{label} Y", value=int(st.session_state[key_y]), step=10)
 
-        dim_cols = st.columns(3)
+        dim_cols = st.columns(2)
         largura_real = dim_cols[0].number_input("Largura real do retângulo (u.m.)", min_value=0.01, value=float(st.session_state.homography_real_width), format="%.4f")
         altura_real = dim_cols[1].number_input("Altura real do retângulo (u.m.)", min_value=0.01, value=float(st.session_state.homography_real_height), format="%.4f")
-        pixels_por_unidade = dim_cols[2].number_input("Resolução da planta (px/u.m.)", min_value=10, max_value=300, value=int(st.session_state.homography_pixels_per_unit), step=10)
-        usar_escala = st.checkbox("Usar este retângulo como escala espacial automática", value=True)
+        points = [
+            [st.session_state.hx1, st.session_state.hy1],
+            [st.session_state.hx2, st.session_state.hy2],
+            [st.session_state.hx3, st.session_state.hy3],
+            [st.session_state.hx4, st.session_state.hy4],
+        ]
+        pixels_por_unidade = estimate_pixels_per_unit(points, largura_real, altura_real)
+        st.session_state.homography_real_width = largura_real
+        st.session_state.homography_real_height = altura_real
+        st.session_state.homography_pixels_per_unit = pixels_por_unidade
+        current_signature = tuple(
+            int(value)
+            for point in points
+            for value in point
+        ) + (
+            round(float(largura_real), 6),
+            round(float(altura_real), 6),
+            int(pixels_por_unidade),
+        )
+        if "homography_meta" in st.session_state and current_signature != st.session_state.get("homography_signature"):
+            st.session_state.pop("matriz_H", None)
+            st.session_state.pop("dim_H", None)
+            st.session_state.pop("homography_meta", None)
+            st.warning("O plano foi alterado. Aplique novamente o plano métrico antes da análise.")
+        st.metric("Resolução automática da planta", f"{pixels_por_unidade} px/u.m.")
+        st.caption("Esse valor define quantos pixels representarão cada unidade real no plano retificado. O app estima automaticamente para preservar detalhe sem gerar uma imagem métrica grande demais.")
 
-        if st.button("Aplicar correção de perspectiva", use_container_width=True):
-            points = [
-                [st.session_state.hx1, st.session_state.hy1],
-                [st.session_state.hx2, st.session_state.hy2],
-                [st.session_state.hx3, st.session_state.hy3],
-                [st.session_state.hx4, st.session_state.hy4],
-            ]
+        if st.button("Aplicar plano métrico", use_container_width=True):
             try:
-                frame, matrix, size, meta = aplicar_homografia(
+                _, matrix, size, meta = aplicar_homografia(
                     st.session_state.raw_initial_frame,
                     points,
                     largura_real,
                     altura_real,
                     pixels_por_unidade,
                 )
-                st.session_state.frame_trabalho = frame
                 st.session_state.matriz_H = matrix
                 st.session_state.dim_H = size
                 st.session_state.homography_meta = meta
-                st.session_state.homography_real_width = largura_real
-                st.session_state.homography_real_height = altura_real
+                st.session_state.homography_signature = current_signature
                 st.session_state.homography_pixels_per_unit = int(round(meta["pixels_per_unit"]))
-                if usar_escala:
-                    width_px, _ = size
-                    st.session_state.orig_x = 0
-                    st.session_state.orig_y = 0
-                    st.session_state.x1 = 0
-                    st.session_state.y1 = 0
-                    st.session_state.x2 = width_px - 1
-                    st.session_state.y2 = 0
-                    st.session_state.dist_real = float(largura_real)
-                    st.session_state.scale_source = "homografia_métrica"
+                st.session_state.scale_source = "homografia_métrica"
                 rerun()
             except ValueError as exc:
                 st.error(f"Não foi possível calcular a homografia: {exc}")
@@ -420,48 +461,69 @@ def render_configuration_step():
     st.markdown("## Passo 3: configuração e análise")
     init_configuration_defaults(st.session_state.raw_initial_frame)
 
-    usar_homografia = st.checkbox(
-        "Ativar calibração por plano (homografia métrica)",
-        help="Use linhas de um retângulo real no piso para corrigir perspectiva e definir a escala espacial.",
+    calibration_mode = st.radio(
+        "Tipo de calibração espacial",
+        ["Dois pontos", "Plano (homografia métrica)"],
+        horizontal=True,
+        help="Use dois pontos quando o vídeo for aproximadamente ortogonal. Use plano quando houver perspectiva e linhas reais do cenário.",
     )
-    tools = ["Nenhum (apenas visualizar)", "Origem (0,0)", "Calibração: ponto 1", "Calibração: ponto 2", "Objeto: canto inferior esquerdo"]
-    if usar_homografia:
-        tools += ["Perspectiva: sup. esq. (1)", "Perspectiva: sup. dir. (2)", "Perspectiva: inf. dir. (3)", "Perspectiva: inf. esq. (4)"]
+    st.session_state.calibration_mode = calibration_mode
+
+    if calibration_mode == "Dois pontos":
+        tools = ["Nenhum (apenas visualizar)", "Origem (0,0)", "Calibração: ponto 1", "Calibração: ponto 2", "Objeto: canto inferior esquerdo"]
+    else:
+        tools = [
+            "Nenhum (apenas visualizar)",
+            "Objeto: canto inferior esquerdo",
+            "Perspectiva: sup. esq. (1)",
+            "Perspectiva: sup. dir. (2)",
+            "Perspectiva: inf. dir. (3)",
+            "Perspectiva: inf. esq. (4)",
+        ]
     ferramenta_ativa = st.radio("Ponto definido pelo clique na imagem", tools, horizontal=True)
 
-    frame_ativo = st.session_state.raw_initial_frame.copy() if "Perspectiva" in ferramenta_ativa else st.session_state.get("frame_trabalho", st.session_state.raw_initial_frame).copy()
-    overlay = draw_configuration_overlay(frame_ativo, usar_homografia, ferramenta_ativa)
+    frame_ativo = st.session_state.raw_initial_frame.copy()
+    overlay = draw_configuration_overlay(frame_ativo, calibration_mode, ferramenta_ativa)
     height, width = overlay.shape[:2]
     target_width = 900
     scale = width / target_width if width > target_width else 1.0
     display = cv2.resize(overlay, (target_width, int(height / scale))) if scale > 1 else overlay
-    value = streamlit_image_coordinates(cv2.cvtColor(display, cv2.COLOR_BGR2RGB), key="image_click")
-    apply_click(value, scale, height, ferramenta_ativa)
+
+    image_col, loupe_col = st.columns([3, 1])
+    with image_col:
+        value = streamlit_image_coordinates(cv2.cvtColor(display, cv2.COLOR_BGR2RGB), key="image_click")
+        apply_click(value, scale, width, height, ferramenta_ativa)
+    with loupe_col:
+        render_point_magnifier(overlay, ferramenta_ativa)
 
     _, buffer = cv2.imencode(".PNG", overlay)
     st.session_state.calibration_image_bytes = BytesIO(buffer).getvalue()
     st.download_button("Baixar imagem de configuração", st.session_state.calibration_image_bytes, "imagem_configuracao.png", "image/png", use_container_width=True)
 
-    if usar_homografia:
+    if calibration_mode == "Plano (homografia métrica)":
         render_homography_controls()
-    if "homography_meta" in st.session_state:
+    if calibration_mode == "Plano (homografia métrica)" and "homography_meta" in st.session_state:
         meta = st.session_state.homography_meta
         st.success(
             f"Plano retificado ativo: {meta['output_width']}x{meta['output_height']} px, "
             f"{meta['pixels_per_unit']:.2f} px/u.m., escala {meta['scale_factor']:.6f} u.m./px."
         )
 
-    col_scale, col_track, col_algorithm = st.columns(3)
-    with col_scale:
-        st.markdown("#### 1. Escala")
-        st.session_state.orig_x = st.number_input("Origem X", value=int(st.session_state.orig_x), step=10)
-        st.session_state.orig_y = st.number_input("Origem Y", value=int(st.session_state.orig_y), step=10)
-        st.session_state.x1 = st.number_input("Ponto 1 - X", value=int(st.session_state.x1), step=10)
-        st.session_state.y1 = st.number_input("Ponto 1 - Y", value=int(st.session_state.y1), step=10)
-        st.session_state.x2 = st.number_input("Ponto 2 - X", value=int(st.session_state.x2), step=10)
-        st.session_state.y2 = st.number_input("Ponto 2 - Y", value=int(st.session_state.y2), step=10)
-        distancia_real = st.number_input("Distância real (u.m.)", min_value=0.01, value=float(st.session_state.dist_real), format="%.4f", key="dist_real_input")
-        st.session_state.dist_real = distancia_real
+    if calibration_mode == "Dois pontos":
+        col_scale, col_track, col_algorithm = st.columns(3)
+        with col_scale:
+            st.markdown("#### 1. Escala")
+            st.session_state.orig_x = st.number_input("Origem X", value=int(st.session_state.orig_x), step=10)
+            st.session_state.orig_y = st.number_input("Origem Y", value=int(st.session_state.orig_y), step=10)
+            st.session_state.x1 = st.number_input("Ponto 1 - X", value=int(st.session_state.x1), step=10)
+            st.session_state.y1 = st.number_input("Ponto 1 - Y", value=int(st.session_state.y1), step=10)
+            st.session_state.x2 = st.number_input("Ponto 2 - X", value=int(st.session_state.x2), step=10)
+            st.session_state.y2 = st.number_input("Ponto 2 - Y", value=int(st.session_state.y2), step=10)
+            distancia_real = st.number_input("Distância real (u.m.)", min_value=0.01, value=float(st.session_state.dist_real), format="%.4f", key="dist_real_input")
+            st.session_state.dist_real = distancia_real
+    else:
+        col_track, col_algorithm = st.columns(2)
+        distancia_real = None
 
     with col_track:
         st.markdown("#### 2. Objeto")
@@ -505,16 +567,28 @@ def render_configuration_step():
                 poly_order = st.slider("Ordem (d)", min_value=2, max_value=4, value=2)
 
     if st.button("Iniciar análise", type="primary", use_container_width=True):
-        oy_cv = int(height - st.session_state.orig_y)
-        y1_cv = int(height - st.session_state.y1)
-        y2_cv = int(height - st.session_state.y2)
-        length_pixels = float(np.sqrt((st.session_state.x2 - st.session_state.x1) ** 2 + (y2_cv - y1_cv) ** 2))
-        if length_pixels <= 0:
-            st.error("A distância da calibração não pode ser zero.")
-            return
+        homography_matrix = None
+        homography_size = None
+        if calibration_mode == "Plano (homografia métrica)":
+            if "homography_meta" not in st.session_state or "matriz_H" not in st.session_state:
+                st.error("Aplique o plano métrico antes de iniciar a análise.")
+                return
+            meta = st.session_state.homography_meta
+            scale_factor = float(meta["scale_factor"])
+            origin_coords = (0, int(meta["output_height"] - 1))
+            homography_matrix = st.session_state.get("matriz_H")
+            homography_size = st.session_state.get("dim_H")
+        else:
+            oy_cv = int(height - st.session_state.orig_y)
+            y1_cv = int(height - st.session_state.y1)
+            y2_cv = int(height - st.session_state.y2)
+            length_pixels = float(np.sqrt((st.session_state.x2 - st.session_state.x1) ** 2 + (y2_cv - y1_cv) ** 2))
+            if length_pixels <= 0:
+                st.error("A distância da calibração não pode ser zero.")
+                return
+            scale_factor = distancia_real / length_pixels
+            origin_coords = (int(st.session_state.orig_x), oy_cv)
 
-        scale_factor = distancia_real / length_pixels
-        origin_coords = (int(st.session_state.orig_x), oy_cv)
         obj_y_cv = int(height - st.session_state.obj_y - st.session_state.obj_h)
         bbox = (int(st.session_state.obj_x), obj_y_cv, int(st.session_state.obj_w), int(st.session_state.obj_h))
         st.session_state.csv_header = (
@@ -523,6 +597,7 @@ def render_configuration_step():
             f"# Frame final: {st.session_state.end_frame_for_analysis}\n"
             f"# Origem em pixels: {origin_coords}\n"
             f"# Fator de escala: {scale_factor:.6f} u.m./pixel\n"
+            f"# Tipo de calibração espacial: {calibration_mode}\n"
             f"# Densidade estroboscópica: {stamp_density.label}\n"
             f"# Espaçamento mínimo entre marcações: {stamp_density.spacing_units:.4f} u.m.\n"
             "# ---\n"
@@ -534,10 +609,11 @@ def render_configuration_step():
             "end_frame": st.session_state.end_frame_for_analysis,
             "origin": origin_coords,
             "scale_factor": scale_factor,
+            "calibration_mode": calibration_mode,
             "stamp_density": stamp_density.label,
             "stamp_spacing": stamp_density.spacing_units,
         }
-        if "homography_meta" in st.session_state:
+        if calibration_mode == "Plano (homografia métrica)" and "homography_meta" in st.session_state:
             meta = st.session_state.homography_meta
             st.session_state.analysis_context["homography"] = meta
             st.session_state.csv_header += (
@@ -564,8 +640,8 @@ def render_configuration_step():
                 status_text,
                 window_size,
                 poly_order,
-                st.session_state.get("matriz_H"),
-                st.session_state.get("dim_H"),
+                homography_matrix,
+                homography_size,
                 auto_savgol,
                 savgol_profile,
             )
@@ -617,21 +693,23 @@ def render_results():
                 savgol_metadata,
                 st.session_state.get("img_vetores"),
             )
-            render_download_link(
+            st.download_button(
                 "Exportar relatório da análise (PDF)",
                 report_bytes,
                 "relatorio_analise_movimento.pdf",
                 "application/pdf",
+                use_container_width=True,
             )
         except Exception as exc:
             st.warning(f"Não foi possível gerar o relatório PDF: {exc}")
         st.dataframe(df_final)
         csv_final = (st.session_state.get("csv_header", "") + df_final.to_csv(index=False)).encode("utf-8-sig")
-        render_download_link(
+        st.download_button(
             "Baixar tabela CSV",
             csv_final,
             "dados_analise.csv",
             "text/csv",
+            use_container_width=True,
         )
 
     with st.expander("Ajuste de curvas teóricas", expanded=True):

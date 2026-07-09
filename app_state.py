@@ -6,8 +6,8 @@ VIDEO_STATE_KEYS = [
     "preview_idx", "start_idx", "end_idx", "raw_initial_frame", "frame_trabalho",
     "start_frame_for_analysis", "end_frame_for_analysis", "results", "csv_header",
     "matriz_H", "dim_H", "homography_meta", "homography_real_width",
-    "homography_real_height", "homography_pixels_per_unit", "scale_source",
-    "dist_real", "img_vetores", "stamp_density_key",
+    "homography_real_height", "homography_pixels_per_unit", "homography_signature", "scale_source",
+    "dist_real", "img_vetores", "stamp_density_key", "calibration_mode", "last_click",
     "orig_x", "orig_y", "x1", "y1", "x2", "y2", "obj_x", "obj_y", "obj_w", "obj_h",
     "hx1", "hy1", "hx2", "hy2", "hx3", "hy3", "hx4", "hy4",
 ]

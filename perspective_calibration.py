@@ -79,6 +79,38 @@ def build_metric_homography(
     )
 
 
+def estimate_pixels_per_unit(
+    source_points: Iterable[Iterable[float]],
+    real_width: float,
+    real_height: float,
+    min_pixels_per_unit: int = 20,
+    max_pixels_per_unit: int = 180,
+    max_output_side: int = 1800,
+) -> int:
+    """Estimate a practical plane resolution from the marked quadrilateral.
+
+    The value is the density of the rectified metric plane in pixels per
+    real-world unit. It controls only the working resolution of the metric
+    plane, not the mathematical homography itself.
+    """
+    pts = np.asarray(source_points, dtype=float)
+    if pts.shape != (4, 2) or real_width <= 0 or real_height <= 0:
+        return 80
+
+    top = np.linalg.norm(pts[1] - pts[0]) / real_width
+    bottom = np.linalg.norm(pts[2] - pts[3]) / real_width
+    right = np.linalg.norm(pts[2] - pts[1]) / real_height
+    left = np.linalg.norm(pts[3] - pts[0]) / real_height
+    candidates = [value for value in (top, bottom, right, left) if np.isfinite(value) and value > 0]
+    if not candidates:
+        return 80
+
+    estimated = float(np.median(candidates))
+    if max(real_width, real_height) > 0:
+        estimated = min(estimated, max_output_side / max(real_width, real_height))
+    return int(round(np.clip(estimated, min_pixels_per_unit, max_pixels_per_unit)))
+
+
 def warp_metric_plane(frame: np.ndarray, calibration: MetricHomography) -> np.ndarray:
     return cv2.warpPerspective(frame, calibration.matrix, calibration.output_size)
 
