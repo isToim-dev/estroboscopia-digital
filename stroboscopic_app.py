@@ -136,6 +136,9 @@ def render_contact_footer():
         """
         <footer class="institutional-footer">
             <p class="institutional-footer__line">
+                Produto desenvolvido para obtenção do título de Mestre Profissional em Matemática.
+            </p>
+            <p class="institutional-footer__line">
                 Orientando: Prof. Antônio M. S. Leite
             </p>
             <p class="institutional-footer__line">
@@ -169,47 +172,60 @@ def build_report_pdf_bytes(df_final, figura_graficos, img_estrob_bytes, savgol_m
 
 def _report_dialog_body(df_final, figura_graficos, img_estrob_bytes, savgol_metadata):
     st.session_state.setdefault("report_team_count", 1)
+    st.session_state.setdefault("report_pdf_bytes", None)
     st.markdown("Preencha os dados para personalizar a primeira página do relatório.")
-    analysis_date = st.date_input(
-        "Data de realização da análise",
-        value=st.session_state.get("report_analysis_date", pd.Timestamp.today().date()),
-        key="report_analysis_date",
-    )
 
     add_col, _ = st.columns([1, 3])
     if add_col.button("+ Adicionar integrante", use_container_width=True):
         st.session_state.report_team_count = int(st.session_state.report_team_count) + 1
 
-    for index in range(int(st.session_state.report_team_count)):
-        name_col, grade_col = st.columns([2, 1])
-        name_col.text_input("Nome do aluno", key=f"report_student_name_{index}")
-        grade_col.text_input("Série/turma", key=f"report_student_grade_{index}")
-
-    team = []
-    for index in range(int(st.session_state.report_team_count)):
-        name = st.session_state.get(f"report_student_name_{index}", "").strip()
-        grade = st.session_state.get(f"report_student_grade_{index}", "").strip()
-        if name or grade:
-            team.append({"name": name or "-", "grade": grade or "-"})
-
-    try:
-        report_bytes = build_report_pdf_bytes(
-            df_final,
-            figura_graficos,
-            img_estrob_bytes,
-            savgol_metadata,
-            team=team,
-            analysis_date=analysis_date.strftime("%d/%m/%Y"),
+    with st.form("report_team_form"):
+        analysis_date = st.date_input(
+            "Data de realização da análise",
+            value=st.session_state.get("report_analysis_date", pd.Timestamp.today().date()),
+            key="report_analysis_date",
         )
+
+        for index in range(int(st.session_state.report_team_count)):
+            name_col, grade_col = st.columns([2, 1])
+            name_col.text_input("Nome do aluno", key=f"report_student_name_{index}")
+            grade_col.text_input("Série/turma", key=f"report_student_grade_{index}")
+
+        submitted = st.form_submit_button(
+            "Gerar relatório personalizado",
+            use_container_width=True,
+        )
+
+    if submitted:
+        team = []
+        for index in range(int(st.session_state.report_team_count)):
+            name = st.session_state.get(f"report_student_name_{index}", "").strip()
+            grade = st.session_state.get(f"report_student_grade_{index}", "").strip()
+            if name or grade:
+                team.append({"name": name or "-", "grade": grade or "-"})
+
+        try:
+            st.session_state.report_pdf_bytes = build_report_pdf_bytes(
+                df_final,
+                figura_graficos,
+                img_estrob_bytes,
+                savgol_metadata,
+                team=team,
+                analysis_date=analysis_date.strftime("%d/%m/%Y"),
+            )
+            st.success("Relatório personalizado pronto para download.")
+        except Exception as exc:
+            st.session_state.report_pdf_bytes = None
+            st.warning(f"Não foi possível gerar o relatório PDF: {exc}")
+
+    if st.session_state.get("report_pdf_bytes"):
         st.download_button(
             "Baixar relatório PDF",
-            report_bytes,
+            st.session_state.report_pdf_bytes,
             "relatorio_analise_movimento.pdf",
             "application/pdf",
             use_container_width=True,
         )
-    except Exception as exc:
-        st.warning(f"Não foi possível gerar o relatório PDF: {exc}")
 
 
 if hasattr(st, "dialog"):

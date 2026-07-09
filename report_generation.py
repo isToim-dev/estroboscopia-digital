@@ -375,6 +375,39 @@ def _figures_grid(figures, styles):
     return grid
 
 
+def _calibration_stroboscopy_panel(calibration_image_bytes, stroboscopic_image_bytes, styles):
+    data = [
+        [
+            _paragraph("<b>Imagem de calibração</b>", styles, "SmallBR"),
+            _paragraph("<b>Imagem estroboscópica</b>", styles, "SmallBR"),
+        ],
+        [
+            _image_cell(calibration_image_bytes, 7.3),
+            _image_cell(stroboscopic_image_bytes, 7.3),
+        ],
+        [
+            _paragraph("Confere objeto, escala, origem e pontos do plano.", styles, "SmallBR"),
+            _paragraph("Resume a trajetória em marcações sucessivas.", styles, "SmallBR"),
+        ],
+    ]
+    panel = Table(data, colWidths=[7.6 * cm, 7.6 * cm])
+    panel.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E7F0FF")),
+                ("BOX", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D4E2")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#E4E9F0")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+    return panel
+
+
 def _savgol_cost_summary(savgol_metadata):
     cost = float(savgol_metadata.get("compute_cost") or 0)
     w_min = int(savgol_metadata.get("window_min") or savgol_metadata.get("window_size") or 5)
@@ -525,20 +558,18 @@ def generate_student_report_pdf(
             ),
             PageBreak(),
             _paragraph("2. Calibração e imagem estroboscópica", styles, "SectionBR"),
-            _paragraph("A calibração define origem, escala, objeto de rastreio e, quando ativada, o plano métrico retificado.", styles),
-            _image_from_bytes(calibration_image_bytes, 15.5),
+            _paragraph(
+                "A calibração define origem, escala, objeto de rastreio e, quando ativada, o plano métrico retificado. "
+                "A imagem estroboscópica mostra o resultado visual dessa configuração.",
+                styles,
+            ),
+            _calibration_stroboscopy_panel(calibration_image_bytes, stroboscopic_image_bytes, styles),
+            Spacer(1, 0.18 * cm),
             _paragraph(
                 "Na imagem de calibração, o aluno deve verificar se o objeto escolhido está bem delimitado e se os pontos de escala "
                 "ou do plano foram marcados em posições coerentes. Pequenos erros nesta etapa aparecem depois como erro nas medidas "
-                "de posição, velocidade e aceleração.",
-                styles,
-                "SmallBR",
-            ),
-            Spacer(1, 0.25 * cm),
-            _image_from_bytes(stroboscopic_image_bytes, 15.5),
-            _paragraph(
-                "A imagem estroboscópica sintetiza o movimento em uma única figura: cada marcação corresponde a uma posição do objeto "
-                "em tempos sucessivos. Espaçamentos maiores entre marcações indicam maior deslocamento naquele intervalo de tempo.",
+                "de posição, velocidade e aceleração. Na imagem estroboscópica, espaçamentos maiores entre marcações indicam maior "
+                "deslocamento naquele intervalo de tempo.",
                 styles,
                 "SmallBR",
             ),

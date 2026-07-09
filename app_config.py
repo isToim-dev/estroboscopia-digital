@@ -56,6 +56,18 @@ DEFAULT_APP_CSS = """
     color: white;
     border-color: #003B65;
 }
+.stFileUploader button {
+    background-color: #0072C6 !important;
+    color: white !important;
+    font-weight: bold !important;
+    border-radius: 5px !important;
+    border: 1px solid #005A9E !important;
+}
+.stFileUploader button:hover {
+    background-color: #005A9E !important;
+    color: white !important;
+    border-color: #003B65 !important;
+}
 .stDownloadButton > button {
     background-color: #1E8A42;
     color: white;

@@ -8,7 +8,7 @@ VIDEO_STATE_KEYS = [
     "matriz_H", "dim_H", "homography_meta", "homography_real_width",
     "homography_real_height", "homography_pixels_per_unit", "homography_signature", "scale_source",
     "dist_real", "img_vetores", "stamp_density_key", "calibration_mode", "last_click",
-    "report_team_count", "report_analysis_date",
+    "report_team_count", "report_analysis_date", "report_pdf_bytes",
     "orig_x", "orig_y", "x1", "y1", "x2", "y2", "obj_x", "obj_y", "obj_w", "obj_h",
     "hx1", "hy1", "hx2", "hy2", "hx3", "hy3", "hx4", "hy4",
 ]
