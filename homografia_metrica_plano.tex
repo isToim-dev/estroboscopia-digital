@@ -1,0 +1,74 @@
+\section{Calibração Espacial por Homografia Métrica em Vídeos não Ortogonais}
+
+Em vídeos gravados com a câmera inclinada em relação ao plano do movimento, a distância medida diretamente em pixels não é uniforme em toda a imagem. Um mesmo comprimento físico pode ocupar quantidades diferentes de pixels dependendo da posição na cena. Por isso, a calibração por apenas dois pontos é adequada apenas quando a câmera está aproximadamente perpendicular ao plano analisado.
+
+Quando o cenário contém linhas do piso, marcas de referência ou outro retângulo físico conhecido, é possível usar uma homografia para transformar a imagem oblíqua em uma vista retificada do plano. Considere quatro pontos da imagem:
+
+\[
+    \mathbf{p}_1,\mathbf{p}_2,\mathbf{p}_3,\mathbf{p}_4,
+\]
+
+marcados na ordem superior esquerdo, superior direito, inferior direito e inferior esquerdo. Esses pontos devem corresponder aos cantos de um retângulo real no plano do movimento, com largura $L$ e altura $A$.
+
+A homografia é uma transformação projetiva representada por uma matriz $H \in \mathbb{R}^{3\times3}$, definida a menos de um fator escalar:
+
+\[
+    \lambda
+    \begin{bmatrix}
+    x'\\y'\\1
+    \end{bmatrix}
+    =
+    H
+    \begin{bmatrix}
+    x\\y\\1
+    \end{bmatrix}.
+\]
+
+No sistema implementado, os quatro pontos da imagem são associados aos quatro pontos de destino:
+
+\[
+    (0,0),\quad
+    (L\rho,0),\quad
+    (L\rho,A\rho),\quad
+    (0,A\rho),
+\]
+
+onde $\rho$ é a resolução escolhida para a planta retificada, em pixels por unidade de medida. Assim, a imagem resultante passa a representar uma vista superior aproximada do plano calibrado, com escala espacial conhecida:
+
+\[
+    S = \frac{1}{\rho}.
+\]
+
+Na prática, por causa do arredondamento da dimensão final em pixels, a escala usada pelo aplicativo é registrada como:
+
+\[
+    S = \frac{L}{N_x-1},
+\]
+
+em que $N_x$ é a largura, em pixels, da imagem retificada. A origem pode ser fixada no canto inferior esquerdo do retângulo retificado. Desse modo, para um ponto rastreado com coordenadas de imagem $(p_x,p_y)$ na imagem corrigida, obtém-se:
+
+\[
+    x = p_x S,
+    \qquad
+    y = (N_y-p_y)S,
+\]
+
+onde $N_y$ é a altura da imagem retificada.
+
+\subsection{Interpretação}
+
+Esse procedimento separa a limitação experimental da limitação matemática. A homografia não ``corrige'' qualquer vídeo de modo absoluto; ela corrige apenas pontos pertencentes ao mesmo plano usado na calibração. Portanto, a técnica é adequada quando a trajetória analisada pode ser aproximada como pertencente ao plano definido pelas referências marcadas, ou quando o erro de profundidade é pequeno em relação aos objetivos didáticos da atividade.
+
+\subsection{Limitações}
+
+As principais limitações são:
+
+\begin{itemize}
+    \item os quatro pontos devem pertencer ao mesmo plano físico;
+    \item a câmera deve permanecer fixa durante todo o vídeo;
+    \item o objeto analisado deve se mover aproximadamente no plano calibrado;
+    \item marcações imprecisas dos cantos propagam erro para a escala;
+    \item objetos com deslocamento significativo em profundidade não são completamente corrigidos por uma única homografia.
+\end{itemize}
+
+Apesar dessas restrições, o uso de referências coplanares amplia a robustez do sistema em vídeos não ortogonais, pois substitui uma calibração local por dois pontos por uma calibração global do plano de movimento. Isso torna a escala espacial mais coerente em toda a região retificada e melhora a interpretação dos gráficos cinemáticos obtidos.

@@ -1,0 +1,20 @@
+# Ambiente validado em 08/07/2026 para Streamlit Community Cloud.
+# Python alvo: ver runtime.txt (python-3.11).
+# As versões diretas abaixo estão fixadas para reduzir quebras por atualizações futuras.
+
+# OpenCV contrib headless: necessário para cv2.TrackerCSRT_create() e adequado para servidor sem GUI.
+opencv-contrib-python-headless==4.12.0.88
+
+# Núcleo numérico e tabela de dados.
+numpy==2.2.5
+pandas==2.2.3
+scipy==1.17.1
+
+# Interface web.
+streamlit==1.44.1
+streamlit-image-coordinates==0.4.0
+
+# Gráficos, imagens e ícones internos da interface.
+matplotlib==3.10.9
+Pillow==11.1.0
+reportlab==4.4.10

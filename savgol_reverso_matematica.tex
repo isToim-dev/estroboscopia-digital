@@ -1,0 +1,189 @@
+\section{Engenharia Reversa dos Parâmetros do Filtro de Savitzky--Golay}
+
+O filtro de Savitzky--Golay pode ser compreendido como um procedimento local de mínimos quadrados. Para cada instante central $t_i$, considera-se uma janela simétrica com $w=2m+1$ pontos:
+
+\[
+    \{y_{i-m},\ldots,y_i,\ldots,y_{i+m}\}.
+\]
+
+Nessa janela, ajusta-se um polinômio de grau $d$:
+
+\[
+    q_i(k)=a_0+a_1k+a_2k^2+\cdots+a_dk^d,
+    \qquad k=-m,\ldots,m,
+\]
+
+minimizando
+
+\[
+    \min_{a_0,\ldots,a_d}
+    \sum_{k=-m}^{m}\left(y_{i+k}-q_i(k)\right)^2.
+\]
+
+Se $X$ é a matriz de Vandermonde local, com linhas
+
+\[
+    [1,k,k^2,\ldots,k^d],
+\]
+
+então a solução de mínimos quadrados é
+
+\[
+    \hat{\mathbf{a}}=(X^TX)^{-1}X^T\mathbf{y}.
+\]
+
+O valor suavizado no centro da janela é $\tilde{y}_i=\hat{a}_0$. As derivadas também são obtidas a partir dos coeficientes locais:
+
+\[
+    \tilde{v}_i=\frac{\hat{a}_1}{\Delta t},
+    \qquad
+    \tilde{a}_i=\frac{2\hat{a}_2}{\Delta t^2}.
+\]
+
+De forma equivalente, para uma derivada de ordem $r$, o filtro pode ser escrito como uma combinação linear dos pontos da janela:
+
+\[
+    \tilde{y}^{(r)}_i
+    =
+    \sum_{k=-m}^{m} c^{(r)}_k y_{i+k},
+\]
+
+em que os coeficientes $c^{(r)}_k$ dependem apenas de $w$, $d$, $r$ e $\Delta t$. Portanto, a escolha de $w$ e $d$ define o compromisso entre fidelidade ao sinal medido e suavização do ruído.
+
+\subsection{Restrições Matemáticas}
+
+Para que o filtro seja bem definido no cálculo de posição, velocidade e aceleração, adotam-se as seguintes restrições:
+
+\[
+    w=2m+1,\qquad w>d,\qquad d\geq 2,\qquad w\leq N,
+\]
+
+onde $N$ é o número total de pontos rastreados. A condição $d\geq2$ é necessária porque a aplicação calcula aceleração, isto é, segunda derivada da posição. Na implementação proposta, a busca padrão considera:
+
+\[
+    5\leq w\leq \min(51,N),
+    \qquad
+    2\leq d\leq 4.
+\]
+
+Esses limites evitam tanto janelas pequenas demais, que amplificam ruídos, quanto polinômios de ordem alta demais, que podem acompanhar oscilações artificiais do rastreamento.
+
+\subsection{Formulação do Problema Inverso}
+
+No uso experimental, o problema não é apenas aplicar o filtro, mas estimar quais parâmetros $(w,d)$ são mais adequados para os dados obtidos. Assim, define-se uma busca sobre todos os pares admissíveis:
+
+\[
+    \mathcal{P}=
+    \{(w,d): w \text{ ímpar},\; w>d,\; d\geq2,\; w\leq N\}.
+\]
+
+Para cada par $(w,d)\in\mathcal{P}$, calcula-se primeiro um erro físico-numérico composto por três critérios observáveis:
+
+\[
+    E(w,d)
+    =
+    \alpha E_{\text{pred}}(w,d)
+    +
+    \beta R_{\text{acc}}(w,d)
+    +
+    \gamma E_{\text{res}}(w,d).
+\]
+
+O primeiro termo, $E_{\text{pred}}$, mede o erro preditivo local por validação cruzada. Em cada janela, remove-se temporariamente o ponto central, ajusta-se o polinômio aos demais pontos e estima-se o valor central. Para a coordenada $x$, por exemplo:
+
+\[
+    e_{x,i}=x_i-\hat{x}_{i,-i}.
+\]
+
+De modo análogo calcula-se $e_{y,i}$. O erro preditivo bidimensional é:
+
+\[
+    E_{\text{pred}}(w,d)
+    =
+    \sqrt{
+    \frac{1}{M}
+    \sum_{i}
+    \left(e_{x,i}^2+e_{y,i}^2\right)
+    },
+\]
+
+onde $M$ é o número de janelas válidas. Esse termo evita que o filtro se afaste excessivamente da trajetória medida.
+
+O segundo termo, $R_{\text{acc}}$, mede a rugosidade da aceleração. Como a diferenciação numérica amplifica ruídos, parâmetros ruins tendem a produzir acelerações muito oscilantes. A rugosidade é estimada pela variação discreta da aceleração, isto é, uma aproximação da derivada temporal da aceleração:
+
+\[
+    R_{\text{acc}}(w,d)
+    =
+    \sqrt{
+    \frac{1}{N-1}
+    \sum_{i}
+    \left[
+    \left(\frac{a_{x,i+1}-a_{x,i}}{\Delta t}\right)^2
+    +
+    \left(\frac{a_{y,i+1}-a_{y,i}}{\Delta t}\right)^2
+    \right]
+    }.
+\]
+
+Esse termo favorece acelerações fisicamente mais coerentes, especialmente em movimentos escolares como queda livre e lançamento oblíquo, nos quais a aceleração vertical tende a ser aproximadamente constante.
+
+O terceiro termo, $E_{\text{res}}$, mede o erro residual entre a trajetória rastreada e a trajetória suavizada. Ele impede que janelas muito grandes eliminem características reais do movimento:
+
+\[
+    E_{\text{res}}(w,d)
+    =
+    \sqrt{
+    \frac{1}{N}
+    \sum_i
+    \left[
+    (x_i-\tilde{x}_i)^2+
+    (y_i-\tilde{y}_i)^2
+    \right]
+    }.
+\]
+
+Separadamente, calcula-se um custo computacional relativo:
+
+\[
+    K(w,d)=w(d+1)^2.
+\]
+
+Esse termo representa que filtros com janelas maiores e polinômios de ordem mais alta exigem mais operações locais.
+
+\subsection{Escolha Ótima Exata}
+
+O sistema primeiro encontra o menor erro físico-numérico observado:
+
+\[
+    E_{\min}=\min_{(w,d)\in\mathcal{P}} E(w,d).
+\]
+
+Em seguida, forma o conjunto de pares cujo erro permanece dentro de uma tolerância relativa $\epsilon$ do erro mínimo:
+
+\[
+    \mathcal{P}_{\epsilon}
+    =
+    \{(w,d)\in\mathcal{P}: E(w,d)\leq E_{\min}(1+\epsilon)\}.
+\]
+
+Para movimentos com aceleração aproximadamente constante, aplica-se ainda uma trava de estabilidade na aceleração, mantendo apenas pares cuja rugosidade permaneça próxima da menor rugosidade disponível para o vídeo. Por fim, entre os pares equivalentes em erro, escolhe-se o menor custo computacional:
+
+\[
+    (w^\ast,d^\ast)
+    =
+    \arg\min_{(w,d)\in\mathcal{P}_{\epsilon}} K(w,d).
+\]
+
+Assim, o aplicativo deixa de devolver uma faixa ampla e passa a recomendar um único par $(w^\ast,d^\ast)$ para o vídeo carregado. Esse par é o menor filtro que preserva o erro mínimo admissível e mantém a estabilidade física exigida pelo perfil escolhido.
+
+\subsection{Perfis de Otimização}
+
+A implementação permite três perfis de ponderação:
+
+\begin{itemize}
+    \item \textbf{Equilibrado}: combina preservação da trajetória, suavidade da aceleração e baixa complexidade;
+    \item \textbf{Aceleração aproximadamente constante}: atribui maior peso à suavidade da aceleração, recomendado para queda livre e lançamento oblíquo;
+    \item \textbf{Evento rápido}: atribui maior peso ao erro preditivo local, preservando picos e mudanças bruscas.
+\end{itemize}
+
+Assim, a engenharia reversa dos parâmetros do filtro deixa de ser uma escolha subjetiva feita por tentativa e erro e passa a ser um problema matemático de otimização sobre dados rastreados. O método permanece independente da biblioteca utilizada: qualquer implementação futura que produza a série temporal $(t,x,y)$ pode reutilizar o mesmo módulo de escolha automática dos parâmetros.
