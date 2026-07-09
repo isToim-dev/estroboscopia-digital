@@ -5,16 +5,20 @@
 - `stroboscopic_app.py`
 - `requirements.txt`
 - `packages.txt`
-- `runtime.txt`
+- `runtime.txt` como registro documental da versão do Python
 - módulos Python (`app_config.py`, `app_state.py`, `sample_videos.py`, `visualization.py`, `video_processing.py`, `perspective_calibration.py`, `savgol_reverse.py`, `ui_controls.py`)
 - `videos_validacao/` se as amostras de 24, 60 e 120 FPS devem aparecer no deploy
 
 ## Configuração do deploy
 
 - Main file path: `stroboscopic_app.py`
-- Python: definido em `runtime.txt` como `python-3.11`
+- Python: selecione `3.11` nas configurações avançadas do Streamlit Community Cloud
 - Dependências Python: `requirements.txt`
 - Dependências de sistema Linux: `packages.txt`
+
+Observação: o Community Cloud pode ignorar `runtime.txt` em fluxos recentes de deploy.
+Por isso, confirme a versão do Python pela interface do Streamlit antes de publicar
+ou reiniciar o aplicativo.
 
 ## Antes de publicar
 

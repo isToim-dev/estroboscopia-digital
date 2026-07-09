@@ -24,7 +24,7 @@ Uma aplicação web construída com Streamlit e OpenCV para analisar o movimento
 
 ## 🚀 Link para a Aplicação Web
 
-**[Acesse a aplicação aqui!](https://stroboscopic-gehjrnqpsm3hrnr3uzvdqg.streamlit.app/)**
+**[Acesse a aplicação aqui!](https://estroboscopia-digital-5lqlcjeub9abnhzgaepxvl.streamlit.app/)**
 
 ---
 
@@ -59,8 +59,9 @@ Uma aplicação web construída com Streamlit e OpenCV para analisar o movimento
 ### Versões fixadas para reprodutibilidade
 
 O arquivo `requirements.txt` fixa as versões das bibliotecas Python para evitar
-que atualizações futuras quebrem a execução do aplicativo. O ambiente de
-publicação usa Python 3.11, conforme `runtime.txt`.
+que atualizações futuras quebrem a execução do aplicativo. No Streamlit Community
+Cloud, selecione Python 3.11 nas configurações avançadas do app; o `runtime.txt`
+fica no repositório como registro documental da versão usada.
 
 | Ferramenta / biblioteca | Versão |
 | --- | --- |
@@ -95,6 +96,7 @@ o funcionamento do rastreador.
 ├── ui_controls.py                   # Controles visuais reutilizáveis da interface
 ├── report_generation.py             # Relatório PDF estruturado para o estudante
 ├── videos_validacao/                 # Amostras de 24, 60 e 120 FPS usadas no deploy
+├── static/                           # Pasta usada pelos exports do Streamlit
 ├── docs/CONTRATOS_MODULOS.md        # Contratos entre módulos
 ├── DEPLOY_STREAMLIT.md              # Guia de publicação no Streamlit Community Cloud
 ├── requirements.txt                 # Dependências Python versionadas
@@ -121,8 +123,8 @@ Para executar esta aplicação em sua máquina local, siga os passos abaixo.
 
 1.  **Clone o repositório:**
     ```bash
-    git clone [https://github.com/Rafael-UFU/Stroboscopic.git](https://github.com/Rafael-UFU/Stroboscopic.git)
-    cd Stroboscopic
+    git clone https://github.com/isToim-dev/estroboscopia-digital.git
+    cd estroboscopia-digital
     ```
 
 2.  **Crie e ative um ambiente virtual:**
