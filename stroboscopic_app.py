@@ -167,15 +167,28 @@ def render_download_link(label, data, filename, mime):
     )
 
 
+def render_institutional_header():
+    st.markdown(
+        """
+        <header class="institutional-header">
+            <div class="institutional-header__program">
+                Universidade Federal de Uberlândia (UFU) | PROFMAT
+            </div>
+            <div class="institutional-header__title">
+                Aplicativo educacional de estroboscopia digital
+            </div>
+            <div class="institutional-header__people">
+                Desenvolvedores: Prof. Antônio M. S. Leite e Prof. Rafael Alves Figueiredo
+            </div>
+        </header>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_upload_step():
-    header_col, action_col = st.columns([3, 1])
-    with header_col:
-        st.markdown("# Análise de Movimento por Vídeo")
-        st.markdown("### Envie seu vídeo ou use uma amostra para testar.")
-    with action_col:
-        if st.button("Reiniciar análise", use_container_width=True):
-            reset_video_state()
-            rerun()
+    st.markdown("# Análise de Movimento por Vídeo")
+    st.markdown("### Envie seu vídeo ou use uma amostra para testar.")
 
     upload_col, samples_col = st.columns([0.95, 2.05])
     with upload_col:
@@ -675,6 +688,8 @@ def main():
     st.session_state.setdefault("step", "upload")
     st.session_state.setdefault("results", None)
 
+    render_institutional_header()
+
     if st.session_state.step == "upload":
         render_upload_step()
     elif st.session_state.step == "frame_selection":
@@ -685,8 +700,6 @@ def main():
     if st.session_state.results:
         st.markdown("---")
         render_results()
-
-    st.caption("Estroboscopia digital com rastreio CSRT, homografia métrica opcional e Savitzky-Golay otimizado.")
 
 
 if __name__ == "__main__":
