@@ -2,6 +2,12 @@
 
 Este app mantém `stroboscopic_app.py` como ponto de entrada do Streamlit e separa os blocos matemáticos/computacionais em módulos com responsabilidades claras.
 
+## Mapas visuais
+
+![Fluxo dos módulos do aplicativo](figures/fluxo_modulos_app.png)
+
+![Contrato de dados do pipeline](figures/contrato_dados_pipeline.png)
+
 ## Entrada Streamlit
 
 `stroboscopic_app.py`
@@ -43,6 +49,7 @@ Este app mantém `stroboscopic_app.py` como ponto de entrada do Streamlit e sepa
 
 - Recebe vídeo, intervalo, caixa de rastreio, escala e parâmetros.
 - Devolve imagem estroboscópica, tabela, gráficos, vídeo rastreado e metadados de Savitzky-Golay.
+- Quando a homografia métrica está ativa, transforma as coordenadas do objeto para o plano métrico sem distorcer a visualização original usada no rastreio.
 - Contrato principal:
 
 ```python
@@ -72,7 +79,8 @@ Saída esperada:
 
 - Constrói uma homografia a partir de quatro pontos de um retângulo real no plano do movimento.
 - Devolve matriz, dimensão retificada e escala espacial.
-- Contratos principais: `build_metric_homography(...)` e `aplicar_homografia(...)`.
+- Estima resolução de planta automaticamente quando o usuário informa as dimensões reais do plano.
+- Contratos principais: `build_metric_homography(...)`, `aplicar_homografia(...)` e `estimate_pixels_per_unit(...)`.
 
 ## Savitzky-Golay reverso
 
@@ -100,6 +108,8 @@ Saída esperada:
 `report_generation.py`
 
 - Gera PDF estruturado com os produtos finais da análise.
+- Personaliza a primeira página com equipe, série/turma e data da análise.
+- Inclui estudo estatístico da aceleração vertical, com média, mediana, variância e desvio padrão.
 - Entrada principal:
   - contexto da análise;
   - imagem de calibração;

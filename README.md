@@ -28,6 +28,19 @@ Uma aplicação web construída com Streamlit e OpenCV para analisar o movimento
 
 ---
 
+## 🧭 Documentação Técnica
+
+- [Método e fluxos dos módulos](docs/METODO_E_FLUXOS.md)
+- [Contratos dos módulos](docs/CONTRATOS_MODULOS.md)
+- [Versionamento e reprodutibilidade](docs/VERSIONAMENTO.md)
+- [Guia de deploy no Streamlit](DEPLOY_STREAMLIT.md)
+
+![Fluxo dos módulos do aplicativo](docs/figures/fluxo_modulos_app.png)
+
+![Método matemático da estroboscopia digital](docs/figures/fluxo_metodo_matematico.png)
+
+---
+
 ## ✨ Funcionalidades
 
 - **Upload de Vídeo:** Suporte para os formatos de vídeo mais comuns (MP4, AVI, MOV).
@@ -62,6 +75,8 @@ O arquivo `requirements.txt` fixa as versões das bibliotecas Python para evitar
 que atualizações futuras quebrem a execução do aplicativo. No Streamlit Community
 Cloud, selecione Python 3.11 nas configurações avançadas do app; o `runtime.txt`
 fica no repositório como registro documental da versão usada.
+Consulte também [docs/VERSIONAMENTO.md](docs/VERSIONAMENTO.md), que detalha a função
+de cada componente interno e externo.
 
 | Ferramenta / biblioteca | Versão |
 | --- | --- |
@@ -95,9 +110,14 @@ o funcionamento do rastreador.
 ├── savgol_reverse.py                # Otimização reversa do filtro Savitzky-Golay
 ├── ui_controls.py                   # Controles visuais reutilizáveis da interface
 ├── report_generation.py             # Relatório PDF estruturado para o estudante
+├── scripts/
+│   └── generate_documentation_diagrams.py  # Geração dos mapas visuais da documentação
 ├── videos_validacao/                 # Amostras de 24, 60 e 120 FPS usadas no deploy
 ├── static/                           # Pasta usada pelos exports do Streamlit
 ├── docs/CONTRATOS_MODULOS.md        # Contratos entre módulos
+├── docs/METODO_E_FLUXOS.md          # Método matemático e fluxos visuais
+├── docs/VERSIONAMENTO.md            # Versões fixadas e componentes do sistema
+├── docs/figures/                    # Imagens dos fluxos dos módulos
 ├── DEPLOY_STREAMLIT.md              # Guia de publicação no Streamlit Community Cloud
 ├── requirements.txt                 # Dependências Python versionadas
 ├── packages.txt                     # Dependências Linux de vídeo/sistema
