@@ -24,7 +24,7 @@ Uma aplicação web construída com Streamlit e OpenCV para analisar o movimento
 
 ## 🚀 Link para a Aplicação Web
 
-**[Acesse a aplicação aqui!](https://estroboscopia-digital-5lqlcjeub9abnhzgaepxvl.streamlit.app/)**
+**[Acesse a aplicação aqui!](https://estroboscopia-digital.streamlit.app/)**
 
 ---
 
