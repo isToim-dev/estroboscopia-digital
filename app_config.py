@@ -113,28 +113,25 @@ DEFAULT_APP_CSS = """
     color: #172033;
     margin-bottom: 0.35rem;
 }
-.institutional-header {
-    border-bottom: 1px solid #D7E0EA;
-    padding: 0.35rem 0 0.75rem 0;
-    margin-bottom: 1.4rem;
-}
-.institutional-header__program {
-    color: #4B5A6A;
-    font-size: 0.86rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    margin-bottom: 0.25rem;
-}
-.institutional-header__title {
+.institutional-footer {
+    background: #F7FAFC;
+    border: 1px solid #D7E0EA;
+    border-radius: 8px;
     color: #172033;
-    font-size: 1.02rem;
-    font-weight: 700;
-    margin-bottom: 0.1rem;
+    margin-top: 2.25rem;
+    padding: 0.85rem 1rem;
 }
-.institutional-header__people {
-    color: #344054;
+.institutional-footer__title {
+    color: #172033;
     font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+}
+.institutional-footer__line {
+    color: #344054;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    margin: 0;
 }
 </style>
 """

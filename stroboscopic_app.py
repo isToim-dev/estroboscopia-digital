@@ -167,20 +167,20 @@ def render_download_link(label, data, filename, mime):
     )
 
 
-def render_institutional_header():
+def render_contact_footer():
     st.markdown(
         """
-        <header class="institutional-header">
-            <div class="institutional-header__program">
-                Universidade Federal de Uberlândia (UFU) | PROFMAT
+        <footer class="institutional-footer">
+            <div class="institutional-footer__title">
+                Informações de contato
             </div>
-            <div class="institutional-header__title">
-                Aplicativo educacional de estroboscopia digital
-            </div>
-            <div class="institutional-header__people">
+            <p class="institutional-footer__line">
                 Desenvolvedores: Prof. Antônio M. S. Leite e Prof. Rafael Alves Figueiredo
-            </div>
-        </header>
+            </p>
+            <p class="institutional-footer__line">
+                PROFMAT | Universidade Federal de Uberlândia (UFU)
+            </p>
+        </footer>
         """,
         unsafe_allow_html=True,
     )
@@ -688,8 +688,6 @@ def main():
     st.session_state.setdefault("step", "upload")
     st.session_state.setdefault("results", None)
 
-    render_institutional_header()
-
     if st.session_state.step == "upload":
         render_upload_step()
     elif st.session_state.step == "frame_selection":
@@ -700,6 +698,8 @@ def main():
     if st.session_state.results:
         st.markdown("---")
         render_results()
+
+    render_contact_footer()
 
 
 if __name__ == "__main__":
