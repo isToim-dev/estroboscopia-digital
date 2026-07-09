@@ -172,7 +172,7 @@ def render_contact_footer():
         """
         <footer class="institutional-footer">
             <p class="institutional-footer__line">
-                Prof. Antônio M. S. Leite
+                Orientando: Prof. Antônio M. S. Leite
             </p>
             <p class="institutional-footer__line">
                 Orientador: Prof. Dr. Rafael Alves Figueiredo
