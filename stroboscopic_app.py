@@ -150,6 +150,74 @@ def render_contact_footer():
     )
 
 
+def build_report_pdf_bytes(df_final, figura_graficos, img_estrob_bytes, savgol_metadata, team=None, analysis_date=None):
+    from report_generation import generate_student_report_pdf
+
+    context = dict(st.session_state.get("analysis_context", {}))
+    context["report_team"] = team or []
+    context["analysis_date"] = analysis_date or pd.Timestamp.today().strftime("%d/%m/%Y")
+    return generate_student_report_pdf(
+        context,
+        st.session_state.get("calibration_image_bytes", img_estrob_bytes),
+        img_estrob_bytes,
+        df_final,
+        figura_graficos,
+        savgol_metadata,
+        st.session_state.get("img_vetores"),
+    )
+
+
+def _report_dialog_body(df_final, figura_graficos, img_estrob_bytes, savgol_metadata):
+    st.session_state.setdefault("report_team_count", 1)
+    st.markdown("Preencha os dados para personalizar a primeira página do relatório.")
+    analysis_date = st.date_input(
+        "Data de realização da análise",
+        value=st.session_state.get("report_analysis_date", pd.Timestamp.today().date()),
+        key="report_analysis_date",
+    )
+
+    add_col, _ = st.columns([1, 3])
+    if add_col.button("+ Adicionar integrante", use_container_width=True):
+        st.session_state.report_team_count = int(st.session_state.report_team_count) + 1
+
+    for index in range(int(st.session_state.report_team_count)):
+        name_col, grade_col = st.columns([2, 1])
+        name_col.text_input("Nome do aluno", key=f"report_student_name_{index}")
+        grade_col.text_input("Série/turma", key=f"report_student_grade_{index}")
+
+    team = []
+    for index in range(int(st.session_state.report_team_count)):
+        name = st.session_state.get(f"report_student_name_{index}", "").strip()
+        grade = st.session_state.get(f"report_student_grade_{index}", "").strip()
+        if name or grade:
+            team.append({"name": name or "-", "grade": grade or "-"})
+
+    try:
+        report_bytes = build_report_pdf_bytes(
+            df_final,
+            figura_graficos,
+            img_estrob_bytes,
+            savgol_metadata,
+            team=team,
+            analysis_date=analysis_date.strftime("%d/%m/%Y"),
+        )
+        st.download_button(
+            "Baixar relatório PDF",
+            report_bytes,
+            "relatorio_analise_movimento.pdf",
+            "application/pdf",
+            use_container_width=True,
+        )
+    except Exception as exc:
+        st.warning(f"Não foi possível gerar o relatório PDF: {exc}")
+
+
+if hasattr(st, "dialog"):
+    render_report_dialog = st.dialog("Dados da equipe para o relatório")(_report_dialog_body)
+else:
+    render_report_dialog = _report_dialog_body
+
+
 def render_upload_step():
     st.markdown("# Análise de Movimento por Vídeo")
     st.markdown("### Envie seu vídeo ou use a galeria para testar.")
@@ -434,8 +502,7 @@ def render_homography_controls():
             st.session_state.pop("dim_H", None)
             st.session_state.pop("homography_meta", None)
             st.warning("O plano foi alterado. Aplique novamente o plano métrico antes da análise.")
-        st.metric("Resolução automática da planta", f"{pixels_por_unidade} px/u.m.")
-        st.caption("Esse valor define quantos pixels representarão cada unidade real no plano retificado. O app estima automaticamente para preservar detalhe sem gerar uma imagem métrica grande demais.")
+        st.caption(f"Resolução automática da planta: `{pixels_por_unidade} px/u.m.`")
 
         if st.button("Aplicar plano métrico", use_container_width=True):
             try:
@@ -681,27 +748,8 @@ def render_results():
             st.download_button("Baixar vídeo com rastreio", video_track_bytes, "video_rastreado.mp4", "video/mp4", use_container_width=True)
             st.download_button("Baixar imagem composta", img_estrob_bytes, "imagem_estroboscopica.png", "image/png", use_container_width=True)
         st.pyplot(figura_graficos)
-        try:
-            from report_generation import generate_student_report_pdf
-
-            report_bytes = generate_student_report_pdf(
-                st.session_state.get("analysis_context", {}),
-                st.session_state.get("calibration_image_bytes", img_estrob_bytes),
-                img_estrob_bytes,
-                df_final,
-                figura_graficos,
-                savgol_metadata,
-                st.session_state.get("img_vetores"),
-            )
-            st.download_button(
-                "Exportar relatório da análise (PDF)",
-                report_bytes,
-                "relatorio_analise_movimento.pdf",
-                "application/pdf",
-                use_container_width=True,
-            )
-        except Exception as exc:
-            st.warning(f"Não foi possível gerar o relatório PDF: {exc}")
+        if st.button("Exportar relatório da análise (PDF)", use_container_width=True):
+            render_report_dialog(df_final, figura_graficos, img_estrob_bytes, savgol_metadata)
         st.dataframe(df_final)
         csv_final = (st.session_state.get("csv_header", "") + df_final.to_csv(index=False)).encode("utf-8-sig")
         st.download_button(

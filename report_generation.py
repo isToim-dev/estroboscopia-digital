@@ -165,6 +165,32 @@ def _math_table(rows, styles, widths=(4.7, 10.5)):
     return table
 
 
+def _formula_list(rows, styles):
+    data = []
+    for number, name, expression in rows:
+        data.append(
+            [
+                _paragraph(f"<b>({number}) {name}</b>", styles, "SmallBR"),
+                _image_cell(_latex_to_png_bytes(expression, width=9.4, height=1.0, fontsize=18), 10.2),
+            ]
+        )
+    table = Table(data, colWidths=[4.6 * cm, 10.6 * cm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D4E2")),
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F2F6FC")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+    return table
+
+
 def _fit_model(t, values, degree):
     coeffs = np.polyfit(t, values, degree)
     poly = np.poly1d(coeffs)
@@ -279,6 +305,46 @@ def _build_single_model_figures(df, fits):
     return figures
 
 
+def _build_acceleration_y_study(df):
+    t = df["tempo_s"].to_numpy(dtype=float)
+    ay = df["ay_um_s2"].to_numpy(dtype=float)
+    valid = np.isfinite(t) & np.isfinite(ay)
+    t = t[valid]
+    ay = ay[valid]
+    if ay.size == 0:
+        ay = np.array([0.0])
+        t = np.array([0.0])
+
+    mean = float(np.mean(ay))
+    median = float(np.median(ay))
+    std = float(np.std(ay, ddof=1)) if ay.size > 1 else 0.0
+    variance = float(std**2)
+    minimum = float(np.min(ay))
+    maximum = float(np.max(ay))
+
+    fig, ax = plt.subplots(figsize=(10.8, 4.2))
+    ax.plot(t, ay, marker="o", markersize=4, color="#b91c1c", lw=1.5, label="Aceleração vertical estimada")
+    ax.axhline(mean, color="#0f766e", lw=2.0, label=f"Média = {mean:.4f}")
+    ax.axhline(median, color="#7c3aed", lw=1.8, linestyle="--", label=f"Mediana = {median:.4f}")
+    if std > 0:
+        ax.fill_between(t, mean - std, mean + std, color="#0f766e", alpha=0.13, label="Média ± 1 desvio padrão")
+    ax.set_title("Estudo estatístico da aceleração vertical")
+    ax.set_xlabel("Tempo (s)")
+    ax.set_ylabel("Aceleração em Y (u.m./s²)")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    return fig, {
+        "mean": mean,
+        "median": median,
+        "std": std,
+        "variance": variance,
+        "min": minimum,
+        "max": maximum,
+        "n": int(ay.size),
+    }
+
+
 def _figures_grid(figures, styles):
     order = ["x_linear", "x_quadratic", "y_linear", "y_quadratic"]
     labels = ["X(t) linear", "X(t) quadrático", "Y(t) linear", "Y(t) quadrático"]
@@ -362,8 +428,11 @@ def generate_student_report_pdf(
     story = []
     models_figure, fits = _build_models_figure(df)
     model_figures = _build_single_model_figures(df, fits)
+    acceleration_y_figure, acceleration_y_stats = _build_acceleration_y_study(df)
     gravity = 2 * fits["y_quadratic"]["coeffs"][0]
     cost_summary = _savgol_cost_summary(savgol_metadata)
+    report_team = context.get("report_team") or []
+    analysis_date = context.get("analysis_date") or "-"
 
     story.extend(
         [
@@ -383,10 +452,25 @@ def generate_student_report_pdf(
                 ],
                 styles,
             ),
+            Spacer(1, 0.18 * cm),
+            _table(
+                [
+                    ("Data da análise", analysis_date),
+                    (
+                        "Equipe",
+                        "<br/>".join(
+                            f"{member.get('name', '-')} - {member.get('grade', '-')}"
+                            for member in report_team
+                            if member.get("name") or member.get("grade")
+                        )
+                        or "Não informada",
+                    ),
+                ],
+                styles,
+            ),
             _paragraph(
-                "Como ler este quadro: ele resume as condições do experimento. O intervalo indica quais frames foram analisados; "
-                "a escala informa a conversão entre pixels e unidade métrica; e o filtro Savitzky-Golay mostra os parâmetros usados "
-                "para suavizar a trajetória antes de estimar velocidades e acelerações.",
+                "Como ler estes quadros: eles documentam a equipe, a data e as condições do experimento. Isso transforma o relatório "
+                "em um registro técnico da prática, permitindo comparar diferentes grupos, vídeos e escolhas de calibração.",
                 styles,
                 "SmallBR",
             ),
@@ -405,38 +489,32 @@ def generate_student_report_pdf(
                 "interpretam a trajetória.",
                 styles,
             ),
-            _math_table(
+            _table(
                 [
-                    ("Centro do objeto", r"$p_x=x_{caixa}+\frac{w}{2},\quad p_y=y_{caixa}+\frac{h}{2}$"),
-                    ("Tempo", r"$t=\frac{frame-frame_{inicial}}{FPS}$"),
-                    ("Escala espacial", r"$S=\frac{d_{real}}{d_{px}}$"),
-                    ("Conversão de coordenadas", r"$X=(p_x-O_x)S,\quad Y=-(p_y-O_y)S$"),
-                    ("Movimento horizontal", r"$X(t)=v_x t+X_0$"),
-                    ("Movimento vertical", r"$Y(t)=at^2+bt+c,\quad a_y=2a$"),
-                    ("Savitzky-Golay", r"$\hat{s}(t)=\sum_{k=0}^{d} c_k t^k$"),
+                    ("Centro do objeto", "Localiza o centro da caixa rastreada em cada frame."),
+                    ("Tempo", "Converte o número do frame em segundos usando o FPS do vídeo."),
+                    ("Escala espacial", "Converte distâncias em pixels para a unidade real escolhida."),
+                    ("Conversão de coordenadas", "Transforma as posições rastreadas em coordenadas físicas X e Y."),
+                    ("Movimento horizontal", "Modelo esperado quando a velocidade horizontal é aproximadamente constante."),
+                    ("Movimento vertical", "Modelo esperado quando há aceleração vertical aproximadamente constante."),
+                    ("Savitzky-Golay", "Ajuste polinomial local usado para suavizar posição e estimar derivadas."),
                 ],
                 styles,
                 widths=(4.7, 10.5),
             ),
             Spacer(1, 0.18 * cm),
-            _paragraph("Equações principais em notação matemática:", styles, "SmallBR"),
-            _image_from_bytes(
-                _latex_to_png_bytes(
-                    r"$t=\frac{frame-frame_{inicial}}{FPS}\qquad X=(p_x-O_x)S\qquad Y=-(p_y-O_y)S$",
-                    width=10.8,
-                    height=0.95,
-                    fontsize=14,
-                ),
-                13.5,
-            ),
-            _image_from_bytes(
-                _latex_to_png_bytes(
-                    r"$X(t)=v_x t+X_0\qquad Y(t)=at^2+bt+c\qquad a_y=2a$",
-                    width=10.8,
-                    height=0.95,
-                    fontsize=14,
-                ),
-                13.5,
+            _paragraph("Fórmulas principais do método:", styles, "SmallBR"),
+            _formula_list(
+                [
+                    (1, "Centro do objeto", r"$p_x=x_{caixa}+\frac{w}{2},\qquad p_y=y_{caixa}+\frac{h}{2}$"),
+                    (2, "Tempo do frame", r"$t=\frac{frame-frame_{inicial}}{FPS}$"),
+                    (3, "Escala espacial", r"$S=\frac{d_{real}}{d_{px}}$"),
+                    (4, "Coordenadas físicas", r"$X=(p_x-O_x)S,\qquad Y=-(p_y-O_y)S$"),
+                    (5, "Modelo horizontal", r"$X(t)=v_x t+X_0$"),
+                    (6, "Modelo vertical", r"$Y(t)=at^2+bt+c,\qquad a_y=2a$"),
+                    (7, "Savitzky-Golay local", r"$\hat{s}(t)=\sum_{k=0}^{d} c_k t^k$"),
+                ],
+                styles,
             ),
             Spacer(1, 0.25 * cm),
             _paragraph(
@@ -472,6 +550,34 @@ def generate_student_report_pdf(
                 "Nesta etapa, observe a forma das curvas: posição descreve a trajetória acumulada; velocidade mostra como a posição "
                 "varia com o tempo; e aceleração indica a mudança da velocidade. Em lançamentos oblíquos, a aceleração vertical deve "
                 "ser o principal indicador físico comparável à gravidade, respeitando a escala adotada.",
+                styles,
+                "SmallBR",
+            ),
+            PageBreak(),
+            _paragraph("Estudo estatístico da aceleração vertical", styles, "SectionBR"),
+            _paragraph(
+                "O gráfico de aceleração vertical recebe destaque porque é nele que o estudante avalia a aproximação experimental da "
+                "gravidade. A linha de média resume a tendência central; a mediana mostra o valor central ordenado; e a faixa de um "
+                "desvio padrão indica a dispersão típica dos dados em torno da média.",
+                styles,
+            ),
+            _image_from_bytes(_fig_to_png_bytes(acceleration_y_figure), 15.5),
+            Spacer(1, 0.2 * cm),
+            _table(
+                [
+                    ("Média", f"{acceleration_y_stats['mean']:.6f} u.m./s² - soma dos valores dividida pela quantidade de pontos."),
+                    ("Mediana", f"{acceleration_y_stats['median']:.6f} u.m./s² - valor central, menos sensível a pontos extremos."),
+                    ("Desvio padrão", f"{acceleration_y_stats['std']:.6f} u.m./s² - dispersão típica em torno da média."),
+                    ("Variância", f"{acceleration_y_stats['variance']:.6f} (u.m./s²)² - quadrado do desvio padrão; aumenta quando há maior espalhamento."),
+                    ("Amplitude observada", f"{acceleration_y_stats['min']:.6f} a {acceleration_y_stats['max']:.6f} u.m./s² em {acceleration_y_stats['n']} pontos."),
+                ],
+                styles,
+                widths=(4.0, 11.2),
+            ),
+            _paragraph(
+                "Interpretação: quanto menor o desvio padrão, mais estável foi a estimativa de aceleração ao longo do vídeo. "
+                "Uma variância alta indica que o rastreio, a calibração, o FPS ou o ruído do movimento produziram oscilações maiores "
+                "na aceleração calculada.",
                 styles,
                 "SmallBR",
             ),
@@ -552,6 +658,7 @@ def generate_student_report_pdf(
         )
 
     plt.close(models_figure)
+    plt.close(acceleration_y_figure)
     for fig in model_figures.values():
         plt.close(fig)
     buffer = BytesIO()
