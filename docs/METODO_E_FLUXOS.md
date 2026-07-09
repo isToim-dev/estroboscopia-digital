@@ -25,6 +25,8 @@ frame, tempo_s, pos_x_px, pos_y_px, pos_x_um, pos_y_um,
 vx_um_s, vy_um_s, ax_um_s2, ay_um_s2
 ```
 
+Quando a homografia métrica está ativa, `pos_x_px` e `pos_y_px` representam o ponto no plano retificado usado para cálculo métrico. Para preservar a visualização sobre o vídeo original, a tabela também registra `view_x_px` e `view_y_px`, que indicam o centro do objeto no frame não distorcido. Essa separação impede que gráficos, vetores e imagens sobre o vídeo disputem o mesmo sistema de coordenadas.
+
 Esse contrato permite que o método matemático seja preservado mesmo se futuramente o rastreador CSRT for trocado por outro algoritmo.
 
 ## Etapas matemáticas principais
@@ -40,6 +42,12 @@ Esse contrato permite que o método matemático seja preservado mesmo se futuram
 | Modelo vertical | `Y(t) = at² + bt + c`, `a_y = 2a` | Estima aceleração vertical a partir do coeficiente quadrático. |
 | Savitzky-Golay | ajuste polinomial local de ordem `d` em janela `w` | Suaviza a trajetória e permite derivadas numéricas. |
 
+## Estudo estatístico da aceleração vertical
+
+![Estudo estatístico da aceleração vertical](figures/estudo_estatistico_aceleracao_y.png)
+
+O relatório final destaca a aceleração vertical porque ela permite discutir a gravidade no lançamento oblíquo. A linha verde representa a média de \(a_y\), a linha roxa representa a mediana e a faixa sombreada indica média ± um desvio padrão. Quanto menor essa faixa, mais estável foi a estimativa da aceleração ao longo do vídeo analisado.
+
 ## Imagens geradas
 
 Os diagramas desta pasta são gerados por:
@@ -53,3 +61,4 @@ Arquivos produzidos:
 - `docs/figures/fluxo_modulos_app.png`
 - `docs/figures/fluxo_metodo_matematico.png`
 - `docs/figures/contrato_dados_pipeline.png`
+- `docs/figures/estudo_estatistico_aceleracao_y.png`

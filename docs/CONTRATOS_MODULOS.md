@@ -50,6 +50,7 @@ Este app mantém `stroboscopic_app.py` como ponto de entrada do Streamlit e sepa
 - Recebe vídeo, intervalo, caixa de rastreio, escala e parâmetros.
 - Devolve imagem estroboscópica, tabela, gráficos, vídeo rastreado e metadados de Savitzky-Golay.
 - Quando a homografia métrica está ativa, transforma as coordenadas do objeto para o plano métrico sem distorcer a visualização original usada no rastreio.
+- Preserva `view_x_px` e `view_y_px` para produtos desenhados sobre o frame original.
 - Contrato principal:
 
 ```python
@@ -127,5 +128,7 @@ O contrato central do método é a tabela:
 ```text
 frame, tempo_s, pos_x_px, pos_y_px, pos_x_um, pos_y_um, vx_um_s, vy_um_s, ax_um_s2, ay_um_s2
 ```
+
+Em modo de homografia, `view_x_px` e `view_y_px` também são exportados para indicar a posição do objeto no vídeo original. Desse modo, a visualização permanece fiel ao frame de origem, enquanto `pos_x_px` e `pos_y_px` podem representar o plano métrico retificado.
 
 Qualquer troca futura de rastreador, biblioteca de vídeo ou interface deve preservar essa tabela como saída do pipeline.

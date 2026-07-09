@@ -154,7 +154,8 @@ def run_analysis(repo):
         frame_start, source_points, real_width, real_height, pixels_per_unit
     )
     height, width = warped_start.shape[:2]
-    initial_bbox = detect_red_bbox(warped_start)
+    initial_bbox_original = detect_red_bbox(frame_start)
+    initial_bbox_warped = detect_red_bbox(warped_start)
 
     original_preview = frame_start.copy()
     cv2.polylines(original_preview, [source_points.astype(np.int32)], True, (0, 165, 255), 3)
@@ -172,18 +173,18 @@ def run_analysis(repo):
     cv2.imwrite(str(output_dir / "01_plano_homografia_original.png"), original_preview)
 
     warped_preview = warped_start.copy()
-    x, y, w, h = initial_bbox
+    x, y, w, h = initial_bbox_warped
     cv2.rectangle(warped_preview, (x, y), (x + w, y + h), (255, 0, 0), 2)
     cv2.imwrite(str(output_dir / "02_plano_retificado_bbox.png"), warped_preview)
 
     scale_factor = real_width / (width - 1)
-    origin = (0, height)
+    origin = (0, height - 1)
     results = processar_video(
         video_bytes,
-        warped_start,
+        frame_start,
         start_frame,
         end_frame,
-        initial_bbox,
+        initial_bbox_original,
         0.5,
         scale_factor,
         origin,
@@ -233,7 +234,7 @@ def run_analysis(repo):
         "output_width_px": int(width),
         "output_height_px": int(height),
         "scale_factor_um_per_px": float(scale_factor),
-        "bbox_initial": initial_bbox,
+        "bbox_initial": initial_bbox_original,
         "savgol": savgol_metadata,
         "model_fits": {
             "x_linear": {key: value for key, value in fit_x_linear.items() if key != "prediction"},

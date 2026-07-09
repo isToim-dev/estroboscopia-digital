@@ -107,7 +107,13 @@ def processar_video(
             cv2.rectangle(frame_video_out, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.circle(frame_video_out, (int(centro_atual_px[0]), int(centro_atual_px[1])), 4, (0, 0, 255), -1)
 
-            carimbos_data.append([frame_atual_idx, centro_medida_px[0], centro_medida_px[1]])
+            carimbos_data.append([
+                frame_atual_idx,
+                centro_medida_px[0],
+                centro_medida_px[1],
+                centro_atual_px[0],
+                centro_atual_px[1],
+            ])
 
             is_stamp = False
             if contador_frames_processados == 0 or (dist_pixels * scale_factor >= fator_distancia):
@@ -138,7 +144,10 @@ def processar_video(
         video_track_bytes = f.read()
     os.remove(temp_video_out.name)
 
-    df_carimbos = pd.DataFrame(carimbos_data, columns=["frame", "pos_x_px", "pos_y_px", "is_stamp"])
+    df_carimbos = pd.DataFrame(
+        carimbos_data,
+        columns=["frame", "pos_x_px", "pos_y_px", "view_x_px", "view_y_px", "is_stamp"],
+    )
     df_carimbos["tempo_s"] = (df_carimbos["frame"] - start_frame_idx) / fps
     df_carimbos["pos_x_um"] = (df_carimbos["pos_x_px"] - origin_coords[0]) * scale_factor
     df_carimbos["pos_y_um"] = -(df_carimbos["pos_y_px"] - origin_coords[1]) * scale_factor
