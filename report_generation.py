@@ -99,11 +99,27 @@ def _image_from_bytes(image_bytes, width_cm=16.0):
     return image
 
 
+def _image_cell(image_bytes, width_cm):
+    image = _image_from_bytes(image_bytes, width_cm)
+    image.hAlign = "CENTER"
+    return image
+
+
 def _fig_to_png_bytes(fig):
     buffer = BytesIO()
     fig.savefig(buffer, format="png", dpi=170, bbox_inches="tight")
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def _latex_to_png_bytes(expression, width=7.2, height=0.9, fontsize=13):
+    fig, ax = plt.subplots(figsize=(width, height))
+    ax.axis("off")
+    ax.text(0.5, 0.5, expression, ha="center", va="center", fontsize=fontsize)
+    fig.tight_layout(pad=0.05)
+    image_bytes = _fig_to_png_bytes(fig)
+    plt.close(fig)
+    return image_bytes
 
 
 def _table(rows, styles, widths=(5.5, 9.7)):
@@ -119,6 +135,30 @@ def _table(rows, styles, widths=(5.5, 9.7)):
                 ("RIGHTPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 5),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+    return table
+
+
+def _math_table(rows, styles, widths=(4.7, 10.5)):
+    data = []
+    for label, expression in rows:
+        data.append([
+            _paragraph(label, styles, "SmallBR"),
+            _image_cell(_latex_to_png_bytes(expression, width=6.8, height=0.55, fontsize=11.5), widths[1] - 0.8),
+        ])
+    table = Table(data, colWidths=[widths[0] * cm, widths[1] * cm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E7F0FF")),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D4E2")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ]
         )
     )
@@ -147,6 +187,20 @@ def _format_model(axis_label, fit):
     if fit["degree"] == 1:
         return f"{axis_label}(t) = {coeffs[0]:.5f}t + {coeffs[1]:.5f}"
     return f"{axis_label}(t) = {coeffs[0]:.5f}t² + {coeffs[1]:.5f}t + {coeffs[2]:.5f}"
+
+
+def _format_model_latex(axis_label, fit):
+    coeffs = fit["coeffs"]
+    if fit["degree"] == 1:
+        return rf"${axis_label}(t) = {coeffs[0]:.5f}t {coeffs[1]:+.5f}$"
+    return rf"${axis_label}(t) = {coeffs[0]:.5f}t^2 {coeffs[1]:+.5f}t {coeffs[2]:+.5f}$"
+
+
+def _format_model_plain_latex(axis_label, fit):
+    coeffs = fit["coeffs"]
+    if fit["degree"] == 1:
+        return rf"{axis_label}(t) = {coeffs[0]:.5f}t {coeffs[1]:+.5f}"
+    return rf"{axis_label}(t) = {coeffs[0]:.5f}t^2 {coeffs[1]:+.5f}t {coeffs[2]:+.5f}"
 
 
 def _build_models_figure(df):
@@ -183,12 +237,112 @@ def _build_models_figure(df):
     return fig, fits
 
 
+def _build_single_model_figures(df, fits):
+    t = df["tempo_s"].to_numpy(dtype=float)
+    x = df["pos_x_um"].to_numpy(dtype=float)
+    y = df["pos_y_um"].to_numpy(dtype=float)
+    configs = [
+        ("x_linear", "X(t) linear", "X", x, "#0f7b3d"),
+        ("x_quadratic", "X(t) quadrático", "X", x, "#1f2937"),
+        ("y_linear", "Y(t) linear", "Y", y, "#6b7280"),
+        ("y_quadratic", "Y(t) quadrático", "Y", y, "#c1121f"),
+    ]
+    figures = {}
+    for key, title, axis_label, values, color in configs:
+        fig, ax = plt.subplots(figsize=(5.4, 3.35))
+        ax.scatter(t, values, s=12, alpha=0.5, color="#2f6f9f", label="Dados rastreados")
+        ax.plot(t, fits[key]["prediction"], color=color, lw=2.1, label="Modelo ajustado")
+        ax.set_title(title)
+        ax.set_xlabel("Tempo (s)")
+        ax.set_ylabel(f"Posição {axis_label} (u.m.)")
+        ax.text(
+            0.03,
+            0.94,
+            _format_model_latex(axis_label, fits[key]),
+            transform=ax.transAxes,
+            va="top",
+            fontsize=9,
+            bbox={"facecolor": "white", "edgecolor": "#d0d7de", "alpha": 0.9, "boxstyle": "round,pad=0.25"},
+        )
+        ax.text(
+            0.03,
+            0.08,
+            rf"$R^2={fits[key]['r2']:.5f}$   RMSE={fits[key]['rmse']:.5f}",
+            transform=ax.transAxes,
+            fontsize=8.5,
+            bbox={"facecolor": "white", "edgecolor": "#e5e7eb", "alpha": 0.9, "boxstyle": "round,pad=0.2"},
+        )
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=7.5, loc="best")
+        fig.tight_layout()
+        figures[key] = fig
+    return figures
+
+
+def _figures_grid(figures, styles):
+    order = ["x_linear", "x_quadratic", "y_linear", "y_quadratic"]
+    labels = ["X(t) linear", "X(t) quadrático", "Y(t) linear", "Y(t) quadrático"]
+    cells = []
+    for key, label in zip(order, labels):
+        cells.append([_paragraph(f"<b>{label}</b>", styles, "SmallBR"), _image_cell(_fig_to_png_bytes(figures[key]), 7.1)])
+    grid = Table(
+        [
+            [cells[0], cells[1]],
+            [cells[2], cells[3]],
+        ],
+        colWidths=[7.6 * cm, 7.6 * cm],
+    )
+    grid.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOX", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D4E2")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#E4E9F0")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBFCFE")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return grid
+
+
+def _savgol_cost_summary(savgol_metadata):
+    cost = float(savgol_metadata.get("compute_cost") or 0)
+    w_min = int(savgol_metadata.get("window_min") or savgol_metadata.get("window_size") or 5)
+    w_max = int(savgol_metadata.get("window_max") or max(w_min, savgol_metadata.get("window_size") or w_min))
+    d_min = int(savgol_metadata.get("poly_order_min") or 2)
+    d_max = int(savgol_metadata.get("poly_order_max") or max(d_min, savgol_metadata.get("poly_order") or d_min))
+    min_cost = float(w_min * (d_min + 1) ** 2)
+    max_cost = float(w_max * (d_max + 1) ** 2)
+    if max_cost <= min_cost:
+        max_cost = max(min_cost, cost, 1.0)
+    low_limit = min_cost + (max_cost - min_cost) / 3
+    medium_limit = min_cost + 2 * (max_cost - min_cost) / 3
+    if cost <= low_limit:
+        label = "baixo"
+    elif cost <= medium_limit:
+        label = "médio"
+    else:
+        label = "alto"
+    return {
+        "cost": cost,
+        "min_cost": min_cost,
+        "low_limit": low_limit,
+        "medium_limit": medium_limit,
+        "max_cost": max_cost,
+        "label": label,
+    }
+
+
 def _footer(font_name):
     def draw(canvas, doc):
         canvas.saveState()
         canvas.setFont(font_name, 8)
         canvas.setFillColor(colors.HexColor("#667085"))
-        canvas.drawString(1.5 * cm, 1.0 * cm, "Relatório de análise - estroboscopia digital")
+        canvas.drawString(1.5 * cm, 1.0 * cm, "Relatório de análise - ESTROBOSCOPIA DIGITAL")
         canvas.drawRightString(A4[0] - 1.5 * cm, 1.0 * cm, f"Página {doc.page}")
         canvas.restoreState()
 
@@ -207,7 +361,9 @@ def generate_student_report_pdf(
     styles, font_name = _styles()
     story = []
     models_figure, fits = _build_models_figure(df)
+    model_figures = _build_single_model_figures(df, fits)
     gravity = 2 * fits["y_quadratic"]["coeffs"][0]
+    cost_summary = _savgol_cost_summary(savgol_metadata)
 
     story.extend(
         [
@@ -227,6 +383,13 @@ def generate_student_report_pdf(
                 ],
                 styles,
             ),
+            _paragraph(
+                "Como ler este quadro: ele resume as condições do experimento. O intervalo indica quais frames foram analisados; "
+                "a escala informa a conversão entre pixels e unidade métrica; e o filtro Savitzky-Golay mostra os parâmetros usados "
+                "para suavizar a trajetória antes de estimar velocidades e acelerações.",
+                styles,
+                "SmallBR",
+            ),
             Spacer(1, 0.25 * cm),
             _paragraph(
                 f"Resultado físico de destaque: o ajuste vertical quadrático estima aceleração "
@@ -242,18 +405,38 @@ def generate_student_report_pdf(
                 "interpretam a trajetória.",
                 styles,
             ),
-            _table(
+            _math_table(
                 [
-                    ("Centro do objeto", "p_x = x_caixa + largura/2; p_y = y_caixa + altura/2"),
-                    ("Tempo", "t = (frame - frame inicial) / FPS"),
-                    ("Escala espacial", "S = distância real / distância em pixels"),
-                    ("Conversão de coordenadas", "X = (p_x - origem_x) S; Y = -(p_y - origem_y) S"),
-                    ("Movimento horizontal", "X(t) = v_x t + X_0, quando a velocidade horizontal é aproximadamente constante"),
-                    ("Movimento vertical", "Y(t) = a t² + b t + c; a_y = 2a"),
-                    ("Savitzky-Golay", "A trajetória local é aproximada por um polinômio; suas derivadas estimam velocidade e aceleração."),
+                    ("Centro do objeto", r"$p_x=x_{caixa}+\frac{w}{2},\quad p_y=y_{caixa}+\frac{h}{2}$"),
+                    ("Tempo", r"$t=\frac{frame-frame_{inicial}}{FPS}$"),
+                    ("Escala espacial", r"$S=\frac{d_{real}}{d_{px}}$"),
+                    ("Conversão de coordenadas", r"$X=(p_x-O_x)S,\quad Y=-(p_y-O_y)S$"),
+                    ("Movimento horizontal", r"$X(t)=v_x t+X_0$"),
+                    ("Movimento vertical", r"$Y(t)=at^2+bt+c,\quad a_y=2a$"),
+                    ("Savitzky-Golay", r"$\hat{s}(t)=\sum_{k=0}^{d} c_k t^k$"),
                 ],
                 styles,
                 widths=(4.7, 10.5),
+            ),
+            Spacer(1, 0.18 * cm),
+            _paragraph("Equações principais em notação matemática:", styles, "SmallBR"),
+            _image_from_bytes(
+                _latex_to_png_bytes(
+                    r"$t=\frac{frame-frame_{inicial}}{FPS}\qquad X=(p_x-O_x)S\qquad Y=-(p_y-O_y)S$",
+                    width=10.8,
+                    height=0.95,
+                    fontsize=14,
+                ),
+                13.5,
+            ),
+            _image_from_bytes(
+                _latex_to_png_bytes(
+                    r"$X(t)=v_x t+X_0\qquad Y(t)=at^2+bt+c\qquad a_y=2a$",
+                    width=10.8,
+                    height=0.95,
+                    fontsize=14,
+                ),
+                13.5,
             ),
             Spacer(1, 0.25 * cm),
             _paragraph(
@@ -266,23 +449,47 @@ def generate_student_report_pdf(
             _paragraph("2. Calibração e imagem estroboscópica", styles, "SectionBR"),
             _paragraph("A calibração define origem, escala, objeto de rastreio e, quando ativada, o plano métrico retificado.", styles),
             _image_from_bytes(calibration_image_bytes, 15.5),
+            _paragraph(
+                "Na imagem de calibração, o aluno deve verificar se o objeto escolhido está bem delimitado e se os pontos de escala "
+                "ou do plano foram marcados em posições coerentes. Pequenos erros nesta etapa aparecem depois como erro nas medidas "
+                "de posição, velocidade e aceleração.",
+                styles,
+                "SmallBR",
+            ),
             Spacer(1, 0.25 * cm),
             _image_from_bytes(stroboscopic_image_bytes, 15.5),
+            _paragraph(
+                "A imagem estroboscópica sintetiza o movimento em uma única figura: cada marcação corresponde a uma posição do objeto "
+                "em tempos sucessivos. Espaçamentos maiores entre marcações indicam maior deslocamento naquele intervalo de tempo.",
+                styles,
+                "SmallBR",
+            ),
             PageBreak(),
             _paragraph("3. Gráficos cinemáticos", styles, "SectionBR"),
             _paragraph("A série rastreada é convertida para posição, velocidade e aceleração nos eixos X e Y.", styles),
             _image_from_bytes(_fig_to_png_bytes(kinematic_figure), 15.5),
+            _paragraph(
+                "Nesta etapa, observe a forma das curvas: posição descreve a trajetória acumulada; velocidade mostra como a posição "
+                "varia com o tempo; e aceleração indica a mudança da velocidade. Em lançamentos oblíquos, a aceleração vertical deve "
+                "ser o principal indicador físico comparável à gravidade, respeitando a escala adotada.",
+                styles,
+                "SmallBR",
+            ),
             PageBreak(),
             _paragraph("4. Modelos ajustados", styles, "SectionBR"),
-            _paragraph("Foram comparados modelos linear e quadrático em cada eixo para interpretar o movimento.", styles),
-            _image_from_bytes(_fig_to_png_bytes(models_figure), 15.5),
+            _paragraph(
+                "Foram comparados modelos linear e quadrático em cada eixo para interpretar o movimento. Cada imagem abaixo mostra "
+                "os dados rastreados e a curva prevista por um dos quatro modelos listados na tabela.",
+                styles,
+            ),
+            _figures_grid(model_figures, styles),
             Spacer(1, 0.25 * cm),
             _table(
                 [
-                    ("X(t) linear", f"{_format_model('X', fits['x_linear'])}; R²={fits['x_linear']['r2']:.6f}; RMSE={fits['x_linear']['rmse']:.6f}"),
-                    ("X(t) quadrático", f"{_format_model('X', fits['x_quadratic'])}; R²={fits['x_quadratic']['r2']:.6f}; RMSE={fits['x_quadratic']['rmse']:.6f}"),
-                    ("Y(t) linear", f"{_format_model('Y', fits['y_linear'])}; R²={fits['y_linear']['r2']:.6f}; RMSE={fits['y_linear']['rmse']:.6f}"),
-                    ("Y(t) quadrático", f"{_format_model('Y', fits['y_quadratic'])}; R²={fits['y_quadratic']['r2']:.6f}; RMSE={fits['y_quadratic']['rmse']:.6f}"),
+                    ("X(t) linear", f"{_format_model_plain_latex('X', fits['x_linear'])}; R²={fits['x_linear']['r2']:.6f}; RMSE={fits['x_linear']['rmse']:.6f}"),
+                    ("X(t) quadrático", f"{_format_model_plain_latex('X', fits['x_quadratic'])}; R²={fits['x_quadratic']['r2']:.6f}; RMSE={fits['x_quadratic']['rmse']:.6f}"),
+                    ("Y(t) linear", f"{_format_model_plain_latex('Y', fits['y_linear'])}; R²={fits['y_linear']['r2']:.6f}; RMSE={fits['y_linear']['rmse']:.6f}"),
+                    ("Y(t) quadrático", f"{_format_model_plain_latex('Y', fits['y_quadratic'])}; R²={fits['y_quadratic']['r2']:.6f}; RMSE={fits['y_quadratic']['rmse']:.6f}"),
                 ],
                 styles,
                 widths=(4.2, 11.0),
@@ -291,7 +498,8 @@ def generate_student_report_pdf(
             _paragraph(
                 f"Leitura: em X, o modelo linear descreve velocidade aproximadamente constante "
                 f"({fits['x_linear']['coeffs'][0]:.4f} u.m./s). Em Y, o modelo quadrático é o mais significativo "
-                f"para lançamento sob aceleração constante.",
+                f"para lançamento sob aceleração constante. Compare R² e RMSE: R² maior indica melhor explicação da variação dos dados, "
+                f"enquanto RMSE menor indica menor erro médio entre a curva e os pontos rastreados.",
                 styles,
             ),
             PageBreak(),
@@ -307,6 +515,30 @@ def generate_student_report_pdf(
                 ],
                 styles,
             ),
+            _paragraph(
+                "O custo relativo do filtro Savitzky-Golay estima o esforço computacional para suavizar a trajetória neste vídeo. "
+                "Ele cresce principalmente com a janela <i>w</i> e com a ordem polinomial <i>d</i>, segundo a aproximação "
+                "<b>C = w(d+1)²</b>. Esse valor não mede diretamente o erro físico; ele compara o custo entre candidatos possíveis "
+                "para o mesmo vídeo. O algoritmo escolhe o menor custo que mantém o erro dentro da tolerância aceita.",
+                styles,
+            ),
+            _table(
+                [
+                    ("Baixo", f"{cost_summary['min_cost']:.0f} ≤ C ≤ {cost_summary['low_limit']:.0f}"),
+                    ("Médio", f"{cost_summary['low_limit']:.0f} < C ≤ {cost_summary['medium_limit']:.0f}"),
+                    ("Alto", f"{cost_summary['medium_limit']:.0f} < C ≤ {cost_summary['max_cost']:.0f}"),
+                    ("Classificação deste vídeo", f"C = {cost_summary['cost']:.0f}, custo {cost_summary['label']}"),
+                ],
+                styles,
+                widths=(4.7, 10.5),
+            ),
+            _paragraph(
+                "Use esta escala para interpretar a escolha automática: custo baixo indica uma solução mais simples e rápida; custo médio "
+                "indica uma suavização mais exigente; custo alto indica que o vídeo exigiu janelas maiores ou polinômios mais complexos "
+                "para manter estabilidade numérica.",
+                styles,
+                "SmallBR",
+            ),
         ]
     )
 
@@ -320,6 +552,8 @@ def generate_student_report_pdf(
         )
 
     plt.close(models_figure)
+    for fig in model_figures.values():
+        plt.close(fig)
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
