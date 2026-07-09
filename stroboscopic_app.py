@@ -171,11 +171,11 @@ def render_contact_footer():
     st.markdown(
         """
         <footer class="institutional-footer">
-            <div class="institutional-footer__title">
-                Informações de contato
-            </div>
             <p class="institutional-footer__line">
-                Desenvolvedores: Prof. Antônio M. S. Leite e Prof. Rafael Alves Figueiredo
+                Prof. Antônio M. S. Leite
+            </p>
+            <p class="institutional-footer__line">
+                Orientador: Prof. Dr. Rafael Alves Figueiredo
             </p>
             <p class="institutional-footer__line">
                 PROFMAT | Universidade Federal de Uberlândia (UFU)
@@ -188,7 +188,7 @@ def render_contact_footer():
 
 def render_upload_step():
     st.markdown("# Análise de Movimento por Vídeo")
-    st.markdown("### Envie seu vídeo ou use uma amostra para testar.")
+    st.markdown("### Envie seu vídeo ou use a galeria para testar.")
 
     upload_col, samples_col = st.columns([0.95, 2.05])
     with upload_col:
@@ -204,7 +204,7 @@ def render_upload_step():
             rerun()
 
     with samples_col:
-        st.markdown("## 2. Vídeos de validação")
+        st.markdown("## 2. Galeria de vídeos")
         st.caption("Amostras prontas para testar.")
         validation_videos = list_validation_videos()
         if not validation_videos:
@@ -699,7 +699,8 @@ def main():
         st.markdown("---")
         render_results()
 
-    render_contact_footer()
+    if st.session_state.step == "upload" and not st.session_state.results:
+        render_contact_footer()
 
 
 if __name__ == "__main__":

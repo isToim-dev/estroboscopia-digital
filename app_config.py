@@ -124,12 +124,6 @@ DEFAULT_APP_CSS = """
 .institutional-footer * {
     color: inherit !important;
 }
-.institutional-footer__title {
-    color: #172033 !important;
-    font-size: 0.95rem;
-    font-weight: 700;
-    margin-bottom: 0.2rem;
-}
 .institutional-footer__line {
     color: #344054 !important;
     font-size: 0.9rem;
