@@ -114,21 +114,24 @@ DEFAULT_APP_CSS = """
     margin-bottom: 0.35rem;
 }
 .institutional-footer {
-    background: #F7FAFC;
-    border: 1px solid #D7E0EA;
+    background: #F7FAFC !important;
+    border: 1px solid #D7E0EA !important;
     border-radius: 8px;
-    color: #172033;
+    color: #172033 !important;
     margin-top: 2.25rem;
     padding: 0.85rem 1rem;
 }
+.institutional-footer * {
+    color: inherit !important;
+}
 .institutional-footer__title {
-    color: #172033;
+    color: #172033 !important;
     font-size: 0.95rem;
     font-weight: 700;
     margin-bottom: 0.2rem;
 }
 .institutional-footer__line {
-    color: #344054;
+    color: #344054 !important;
     font-size: 0.9rem;
     line-height: 1.45;
     margin: 0;
